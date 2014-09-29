@@ -10,12 +10,14 @@ FaoutManager::FaoutManager(boost::asio::libusb_service& service) :
 		if (ev == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
 			if (!hasDevice(dev)) {
 				try {
+					// TODO: use serial for identifying faout devices?
 					auto faout = std::make_shared<FaoutDevice>(dev);
 					if (hasSerial(faout->m_serial)) {
 						std::cerr << "Not adding 2nd device with identical serial: " << faout->m_serial << std::endl;
 					} else {
 						m_device_map.insert(std::make_pair(dev, faout->shared_from_this()));
 						m_serial_map.insert(std::make_pair(faout->m_serial, faout->shared_from_this()));
+						std::cout << "Added device (" << faout->m_serial << ")" << std::endl;
 					}
 				} catch (const std::exception& e) {
 					std::cerr << "Adding device failed: " << e.what() << std::endl;
@@ -23,6 +25,7 @@ FaoutManager::FaoutManager(boost::asio::libusb_service& service) :
 			}
 		} else {
 			if (hasDevice(dev)) {
+				std::cout << "Removed device (" << m_device_map[dev]->m_serial << ")" << std::endl;
 				m_serial_map.erase(m_device_map[dev]->m_serial);
 			}
 			m_device_map.erase(dev);
