@@ -3,9 +3,10 @@
 using boost::asio::ip::tcp;
 
 
-ControlServer::ControlServer(int port, boost::asio::io_service& io_service_) :
-		m_acceptor(io_service_),
-		m_socket(io_service_),
+ControlServer::ControlServer(int port, boost::asio::io_service& service, ControlHandler& handler) :
+		m_handler(handler),
+		m_acceptor(service),
+		m_socket(service),
 		m_connection_manager()
 {
 	tcp::endpoint ep4(tcp::v4(), port);
@@ -34,7 +35,7 @@ void ControlServer::do_accept() {
 			if (!ec) {
 				m_connection_manager.start(
 					std::make_shared<ControlConnection>(
-						std::move(m_socket), m_connection_manager)
+						std::move(m_socket), m_connection_manager, m_handler)
 				);
 			}
 			do_accept();
