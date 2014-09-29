@@ -1,0 +1,36 @@
+#ifndef CONTROLCONNECTION_H_
+#define CONTROLCONNECTION_H_
+
+#include <memory>
+#include <array>
+#include <boost/asio.hpp>
+#include <msgpack.hpp>
+
+#define CONTROL_MSG_MAX_BYTES (10*1024*1024)
+
+class ControlConnectionManager;
+
+class ControlConnection
+		: public std::enable_shared_from_this<ControlConnection> {
+public:
+	ControlConnection(const ControlConnection&) = delete;
+	ControlConnection& operator=(const ControlConnection&) = delete;
+	explicit ControlConnection(boost::asio::ip::tcp::socket socket,
+			ControlConnectionManager& manager);
+	virtual ~ControlConnection();
+
+	void start();
+	void stop();
+
+private:
+	void do_read();
+	void do_write();
+	boost::asio::ip::tcp::socket m_socket;
+	ControlConnectionManager& m_connection_manager;
+	msgpack::unpacker m_msgbuffer_in;
+	msgpack::sbuffer m_msgbuffer_out;
+};
+
+typedef std::shared_ptr<ControlConnection> ptrControlConnection_t;
+
+#endif /* CONTROLCONNECTION_H_ */
