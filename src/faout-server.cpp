@@ -6,17 +6,23 @@
 #include "network/ControlServer.h"
 #include "network/ControlHandler.h"
 
-#define RETURN_RPC_ERROR(STR) { \
-	reply.pack_array(2); \
-	reply.pack_int8(-1); \
-	reply << std::string(STR); \
+#define RPC_RCODE_ERROR -1
+#define RPC_RCODE_OK 0
+#define RPC_RCODE_ADDED 1
+#define RPC_RCODE_REMOVED 2
+#define RPC_RCODE_STATUS 3
+
+#define RETURN_RPC_VALUE(PACKER, VAL) { \
+	PACKER.pack_array(2); \
+	PACKER.pack_int8(RPC_RCODE_OK); \
+	PACKER << VAL; \
     return; \
 }
 
-#define RETURN_RPC_VALUE(VAL) { \
-	reply.pack_array(2); \
-	reply.pack_int8(0); \
-	reply << VAL; \
+#define RETURN_RPC_ERROR(PACKER, STR) { \
+	PACKER.pack_array(2); \
+	PACKER.pack_int8(RPC_RCODE_ERROR); \
+	PACKER << std::string(STR); \
     return; \
 }
 
@@ -29,29 +35,29 @@ public:
 		std::vector<msgpack::object> args;
 		try {
 			request.convert(&args);
-		} catch (std::exception& e) RETURN_RPC_ERROR("Invalid arguments");
+		} catch (std::exception& e) RETURN_RPC_ERROR(reply, "Invalid arguments");
 
 		// try to read command
 		std::string cmd;
 		try {
 			args.at(0).convert(&cmd);
-		} catch (std::exception& e) RETURN_RPC_ERROR("Invalid arguments");
+		} catch (std::exception& e) RETURN_RPC_ERROR(reply, "Invalid arguments");
 
 		// handle device list command
 		if (cmd == "devicelist") {
 			std::list<std::string> devicelist;
 			m_manager.getDeviceList(devicelist);
-			RETURN_RPC_VALUE(devicelist);
+			RETURN_RPC_VALUE(reply, devicelist);
 		}
 
 		// other commands require a device serial
 		std::string serial;
 		try {
 			args.at(1).convert(&serial);
-		} catch (std::exception& e) RETURN_RPC_ERROR("Invalid arguments");
+		} catch (std::exception& e) RETURN_RPC_ERROR(reply, "Invalid arguments");
 
 		if (!m_manager.hasSerial(serial)) {
-			RETURN_RPC_ERROR("Unknown device serial");
+			RETURN_RPC_ERROR(reply, "Unknown device serial");
 		}
 		auto device = m_manager.getDevice(serial);
 
@@ -62,43 +68,43 @@ public:
 			try {
 				args.at(2).convert(&reg);
 				args.at(3).convert(&value);
-			} catch (std::exception& e) RETURN_RPC_ERROR("Invalid arguments");
+			} catch (std::exception& e) RETURN_RPC_ERROR(reply, "Invalid arguments");
 
 			if (device->writeReg(reg, value)) {
-				RETURN_RPC_VALUE(0);
+				RETURN_RPC_VALUE(reply, 0);
 			} else {
 				// TODO: handle device errors in some way?
-				RETURN_RPC_ERROR("Device error");
+				RETURN_RPC_ERROR(reply, "Device error");
 			}
 		} else if (cmd == "readreg") {
 			uint8_t reg;
 			uint16_t value;
 			try {
 				args.at(2).convert(&reg);
-			} catch (std::exception& e) RETURN_RPC_ERROR("Invalid arguments");
+			} catch (std::exception& e) RETURN_RPC_ERROR(reply, "Invalid arguments");
 
 			if (device->readReg(reg, &value)) {
-				RETURN_RPC_VALUE(value);
+				RETURN_RPC_VALUE(reply, value);
 			} else {
 				// TODO: handle device errors in some way?
-				RETURN_RPC_ERROR("Device error");
+				RETURN_RPC_ERROR(reply, "Device error");
 			}
 		} else if (cmd == "writeram") {
 			std::vector<uint16_t> sequence;
 			try {
 				args.at(2).convert(&sequence);
-			} catch (std::exception& e) RETURN_RPC_ERROR("Invalid arguments");
+			} catch (std::exception& e) RETURN_RPC_ERROR(reply, "Invalid arguments");
 
 			if (device->writeRam(sequence.data(), sequence.size())) {
-				RETURN_RPC_VALUE(0);
+				RETURN_RPC_VALUE(reply, 0);
 			} else {
 				// TODO: handle device errors in some way?
-				RETURN_RPC_ERROR("Device error");
+				RETURN_RPC_ERROR(reply, "Device error");
 			}
 		}
 
 		// command was not handled
-		RETURN_RPC_ERROR("Unknown command");
+		RETURN_RPC_ERROR(reply, "Unknown command");
 	}
 	FaoutManager& m_manager;
 };
@@ -119,9 +125,21 @@ int main() {
 		// add faout event handlers
 		faout_manager.setAddedCallback([&](const std::string& serial){
 			std::cout << "Added device: " << serial << std::endl;
+			auto buffer_out = std::make_shared<msgpack::sbuffer>();
+			msgpack::packer<msgpack::sbuffer> packer_out(buffer_out.get());
+			packer_out.pack_array(2);
+			packer_out.pack_int8(RPC_RCODE_ADDED);
+			packer_out << serial;
+			control_server.sendAll(buffer_out);
 		});
 		faout_manager.setRemovedCallback([&](const std::string& serial){
 			std::cout << "Removed device: " << serial << std::endl;
+			auto buffer_out = std::make_shared<msgpack::sbuffer>();
+			msgpack::packer<msgpack::sbuffer> packer_out(buffer_out.get());
+			packer_out.pack_array(2);
+			packer_out.pack_int8(RPC_RCODE_REMOVED);
+			packer_out << serial;
+			control_server.sendAll(buffer_out);
 		});
 
 		// add system signal handler
