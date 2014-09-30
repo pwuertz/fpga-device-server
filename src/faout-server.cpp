@@ -41,10 +41,7 @@ public:
 		if (cmd == "devicelist") {
 			std::list<std::string> devicelist;
 			m_manager.getDeviceList(devicelist);
-			reply.pack_array(1+devicelist.size());
-			reply.pack_int8(0);
-			for (auto dev: devicelist) reply << dev;
-			return;
+			RETURN_RPC_VALUE(devicelist);
 		}
 
 		// other commands require a device serial
@@ -86,6 +83,18 @@ public:
 				// TODO: handle device errors in some way?
 				RETURN_RPC_ERROR("Device error");
 			}
+		} else if (cmd == "writeram") {
+			std::vector<uint16_t> sequence;
+			try {
+				args.at(2).convert(&sequence);
+			} catch (std::exception& e) RETURN_RPC_ERROR("Invalid arguments");
+
+			if (device->writeRam(sequence.data(), sequence.size())) {
+				RETURN_RPC_VALUE(0);
+			} else {
+				// TODO: handle device errors in some way?
+				RETURN_RPC_ERROR("Device error");
+			}
 		}
 
 		// command was not handled
@@ -104,8 +113,16 @@ int main() {
 		FaoutManager faout_manager(libusb_service);
 		FaoutRpcHandler faout_rpc_handler(faout_manager);
 
-		// add rpc service
+		// add network service
 		ControlServer control_server(9000, io_service, faout_rpc_handler);
+
+		// add faout event handlers
+		faout_manager.setAddedCallback([&](const std::string& serial){
+			std::cout << "Added device: " << serial << std::endl;
+		});
+		faout_manager.setRemovedCallback([&](const std::string& serial){
+			std::cout << "Removed device: " << serial << std::endl;
+		});
 
 		// add system signal handler
 		boost::asio::signal_set signals(io_service);

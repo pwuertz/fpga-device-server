@@ -1,7 +1,12 @@
 #include "FaoutManager.h"
 
 FaoutManager::FaoutManager(boost::asio::libusb_service& service) :
-	m_libusb_service(service)
+	m_libusb_service(service),
+	m_device_map(),
+	m_serial_map(),
+	m_device_added_cb(),
+	m_device_removed_cb(),
+	m_device_status_cb()
 {
 	int faout_vid = 0x0403;
 	int faout_pid = 0x6010;
@@ -17,7 +22,7 @@ FaoutManager::FaoutManager(boost::asio::libusb_service& service) :
 					} else {
 						m_device_map.insert(std::make_pair(dev, faout->shared_from_this()));
 						m_serial_map.insert(std::make_pair(faout->m_serial, faout->shared_from_this()));
-						std::cout << "Added device (" << faout->m_serial << ")" << std::endl;
+						if (m_device_added_cb) m_device_added_cb(faout->m_serial);
 					}
 				} catch (const std::exception& e) {
 					std::cerr << "Adding device failed: " << e.what() << std::endl;
@@ -25,10 +30,10 @@ FaoutManager::FaoutManager(boost::asio::libusb_service& service) :
 			}
 		} else {
 			if (hasDevice(dev)) {
-				std::cout << "Removed device (" << m_device_map[dev]->m_serial << ")" << std::endl;
+				if (m_device_added_cb) m_device_removed_cb(m_device_map[dev]->m_serial);
 				m_serial_map.erase(m_device_map[dev]->m_serial);
+				m_device_map.erase(dev);
 			}
-			m_device_map.erase(dev);
 		}
 	});
 }
@@ -56,4 +61,16 @@ ptrFaoutDevice_t FaoutManager::getDevice(const std::string& serial) {
 
 bool FaoutManager::hasSerial(const std::string& serial) {
 	return m_serial_map.find(serial) != m_serial_map.end();
+}
+
+void FaoutManager::setAddedCallback(fn_device_added_cb cb) {
+	m_device_added_cb = std::move(cb);
+}
+
+void FaoutManager::setRemovedCallback(fn_device_removed_cb cb) {
+	m_device_removed_cb = std::move(cb);
+}
+
+void FaoutManager::setStatusCallback(fn_device_status_cb cb) {
+	m_device_status_cb = std::move(cb);
 }

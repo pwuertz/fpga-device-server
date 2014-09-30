@@ -14,6 +14,7 @@ public:
 	explicit ControlServer(int port, boost::asio::io_service& service, ControlHandler& handler);
 	virtual ~ControlServer();
 
+	void sendAll(std::shared_ptr<msgpack::sbuffer>& buffer);
 	void stop();
 
 private:

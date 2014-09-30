@@ -23,7 +23,7 @@ ControlServer::~ControlServer() {
 
 void ControlServer::stop() {
 	m_acceptor.close();
-	m_connection_manager.stop_all();
+	m_connection_manager.stopAll();
 }
 
 void ControlServer::do_accept() {
@@ -40,4 +40,8 @@ void ControlServer::do_accept() {
 			}
 			do_accept();
 		});
+}
+
+void ControlServer::sendAll(std::shared_ptr<msgpack::sbuffer>& buffer) {
+	m_connection_manager.sendAll(buffer);
 }

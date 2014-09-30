@@ -36,6 +36,18 @@ void ControlConnection::stop() {
 	m_socket.close();
 }
 
+void ControlConnection::send(std::shared_ptr<msgpack::sbuffer> buffer) {
+	// if there is no write in progress, schedule do_write() call
+	if (m_msgbuffer_out.empty()) {
+		auto self(shared_from_this());
+		m_socket.get_io_service().post([this, self](){
+			do_write();
+		});
+	}
+	// add buffer for data to send
+	m_msgbuffer_out.emplace_back(buffer);
+}
+
 void ControlConnection::do_read() {
 	// reserve buffer for incoming data
 	m_msgbuffer_in.reserve_buffer(MSGPACK_UNPACKER_RESERVE_SIZE);
@@ -47,8 +59,6 @@ void ControlConnection::do_read() {
 		[this, self](boost::system::error_code ec, std::size_t bytes_transferred)
 		{
 			if (!ec) {
-				bool write_in_progress = !m_msgbuffer_out.empty();
-
 				// commit received bytes
 				m_msgbuffer_in.buffer_consumed(bytes_transferred);
 
@@ -58,12 +68,11 @@ void ControlConnection::do_read() {
 					while(m_msgbuffer_in.next(&result)) {
 						// handle received message
 						msgpack::object object = result.get();
-						m_msgbuffer_out.emplace_back();
-						msgpack::packer<msgpack::sbuffer> pack_out(m_msgbuffer_out.back());
-						m_handler.handleRequest(object, pack_out);
+						auto buffer_out = std::make_shared<msgpack::sbuffer>();
+						msgpack::packer<msgpack::sbuffer> packer_out(buffer_out.get());
+						m_handler.handleRequest(object, packer_out);
+						send(buffer_out);
 					}
-					if (!m_msgbuffer_out.empty() && !write_in_progress)
-						do_write();
 				} catch (msgpack::unpack_error& e) {
 					std::cerr << "MsgPack exception: " << e.what() << std::endl;
 					m_connection_manager.stop(shared_from_this());
@@ -92,18 +101,18 @@ void ControlConnection::do_read() {
 void ControlConnection::do_write() {
 	if (m_msgbuffer_out.empty()) return;
 
-	msgpack::sbuffer& packet = m_msgbuffer_out.front();
+	auto packet = m_msgbuffer_out.front();
 
 	auto self(shared_from_this());
-	auto buffer = boost::asio::buffer(packet.data() + m_msgbuffer_out_offset, packet.size() - m_msgbuffer_out_offset);
+	auto buffer = boost::asio::buffer(packet->data() + m_msgbuffer_out_offset, packet->size() - m_msgbuffer_out_offset);
 	m_socket.async_write_some(buffer,
 		[this, self](boost::system::error_code ec, std::size_t bytes_transferred)
 		{
 			if (!ec) {
-				msgpack::sbuffer& packet = m_msgbuffer_out.front();
+				auto packet = m_msgbuffer_out.front();
 				m_msgbuffer_out_offset += bytes_transferred;
 
-				if (m_msgbuffer_out_offset != packet.size()) {
+				if (m_msgbuffer_out_offset != packet->size()) {
 					// still bytes left to send
 					do_write();
 				} else {

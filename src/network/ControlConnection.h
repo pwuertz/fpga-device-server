@@ -23,6 +23,7 @@ public:
 
 	void start();
 	void stop();
+	void send(std::shared_ptr<msgpack::sbuffer> buffer);
 
 private:
 	void do_read();
@@ -31,7 +32,7 @@ private:
 	ControlConnectionManager& m_connection_manager;
 	ControlHandler& m_handler;
 	msgpack::unpacker m_msgbuffer_in;
-	std::deque<msgpack::sbuffer> m_msgbuffer_out;
+	std::deque<std::shared_ptr<msgpack::sbuffer>> m_msgbuffer_out;
 	size_t m_msgbuffer_out_offset;
 };
 

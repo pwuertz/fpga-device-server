@@ -13,11 +13,17 @@ void ControlConnectionManager::stop(ptrControlConnection_t c) {
 	c->stop();
 }
 
-void ControlConnectionManager::stop_all() {
+void ControlConnectionManager::stopAll() {
 	for (auto c: m_connections) {
 		c->stop();
 	}
 	m_connections.clear();
+}
+
+void ControlConnectionManager::sendAll(std::shared_ptr<msgpack::sbuffer>& buffer) {
+	for (auto c: m_connections) {
+		c->send(buffer);
+	}
 }
 
 int ControlConnectionManager::numConnections() {

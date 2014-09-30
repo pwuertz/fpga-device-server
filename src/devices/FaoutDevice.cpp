@@ -153,7 +153,7 @@ bool FaoutDevice::writeRam(const uint16_t* data, unsigned int n) {
 	while (n_sent != n) {
 		uint16_t n_packet = std::min(n-n_sent, max_words);
 		int n_packet_bytes = n_packet * sizeof(uint16_t);
-		out_buffer[0] = be16toh(4 << 8);
+		out_buffer[0] = be16toh(4 << 8);  // write ram cmd, no addr required
 		out_buffer[1] = be16toh(n_packet);
 		for (int i = 0; i < n_packet; ++i) {
 			out_buffer[i+2] = be16toh(data[n_sent + i]);
