@@ -12,6 +12,9 @@ public:
 	FaoutDevice(libusb_device* dev);
 	virtual ~FaoutDevice();
 
+	bool updateStatus();
+	uint16_t lastStatus();
+
 	bool writeReg(uint8_t addr, uint16_t value);
 	bool readReg(uint8_t addr, uint16_t* value);
 	bool writeRam(const uint16_t* data, unsigned int n);
@@ -20,6 +23,7 @@ public:
 
 private:
 	ftdi_context* m_ftdi;
+	uint16_t m_last_status;
 };
 
 typedef std::shared_ptr<FaoutDevice> ptrFaoutDevice_t;

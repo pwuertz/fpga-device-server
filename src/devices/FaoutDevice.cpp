@@ -34,7 +34,9 @@ static std::string getDeviceSerial(libusb_device* dev) {
 
 
 FaoutDevice::FaoutDevice(libusb_device* dev) :
-		m_serial(getDeviceSerial(dev)), m_ftdi(nullptr)
+		m_serial(getDeviceSerial(dev)),
+		m_ftdi(nullptr),
+		m_last_status(0xffff)
 {
 	// open FTDI interface A
 	ftdi_context* ftdi_a;
@@ -143,6 +145,18 @@ bool FaoutDevice::readReg(uint8_t addr, uint16_t* value) {
 
 	*value = be16toh(result);
 	return true;
+}
+
+bool FaoutDevice::updateStatus() {
+	uint16_t old_status = m_last_status;
+	if (!readReg(0, &m_last_status)) {
+		// TODO: handle usb device error
+	}
+	return m_last_status != old_status;
+}
+
+uint16_t FaoutDevice::lastStatus() {
+	return m_last_status;
 }
 
 bool FaoutDevice::writeRam(const uint16_t* data, unsigned int n) {

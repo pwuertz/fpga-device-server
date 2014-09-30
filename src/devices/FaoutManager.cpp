@@ -8,6 +8,7 @@ FaoutManager::FaoutManager(boost::asio::libusb_service& service) :
 	m_device_removed_cb(),
 	m_device_status_cb()
 {
+	// handler for new or removed faout devices
 	int faout_vid = 0x0403;
 	int faout_pid = 0x6010;
 	m_libusb_service.addHotplugHandler(faout_vid, faout_pid, LIBUSB_HOTPLUG_MATCH_ANY,
@@ -36,6 +37,8 @@ FaoutManager::FaoutManager(boost::asio::libusb_service& service) :
 			}
 		}
 	});
+
+	// TODO: start periodic status updates of registered devices
 }
 
 FaoutManager::~FaoutManager() {
