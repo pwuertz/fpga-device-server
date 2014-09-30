@@ -10,13 +10,22 @@ public:
 		m_descriptor(std::move(desc)), m_libusb_service(serivce) {
 	}
 
+	~libusb_service_fd_watcher() {
+		stop();
+	}
+
 	void start(short events) {
 		if (events & POLLIN) do_read();
 		if (events & POLLOUT) do_write();
 	}
 
 	void stop() {
-		m_descriptor.cancel();
+		// cancel operations and release fd because
+		// this watcher is not supposed to claim / close it
+		if (m_descriptor.is_open()) {
+			m_descriptor.cancel();
+			m_descriptor.release();
+		}
 	}
 
 private:
@@ -130,10 +139,7 @@ void libusb_service::startWatcher(int fd, short events) {
 }
 
 void libusb_service::stopWatcher(int fd) {
-	if (!isWatching(fd)) {
-		std::cerr << "libusb_service: no watcher for " << fd << std::endl;
-		return;
-	}
+	if (!isWatching(fd)) return;
 
 	p_libusb_service_fd_watcher tmp = m_fd_watchers[fd]->shared_from_this();
 	m_fd_watchers.erase(fd);

@@ -25,7 +25,6 @@ ControlConnection::ControlConnection(boost::asio::ip::tcp::socket socket,
 }
 
 ControlConnection::~ControlConnection() {
-	// TODO Auto-generated destructor stub
 }
 
 void ControlConnection::start() {
@@ -33,7 +32,15 @@ void ControlConnection::start() {
 }
 
 void ControlConnection::stop() {
-	m_socket.close();
+	if (m_socket.is_open()) {
+		try {
+			m_socket.shutdown(m_socket.shutdown_both);
+			m_socket.close();
+		} catch (std::exception& e) {
+			std::cerr << "Error closing socket fd=" << m_socket.native_handle();
+			std::cerr << ", " << e.what() << std::endl;
+		}
+	}
 }
 
 void ControlConnection::send(std::shared_ptr<msgpack::sbuffer> buffer) {

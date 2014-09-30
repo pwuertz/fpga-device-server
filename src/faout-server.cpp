@@ -1,5 +1,6 @@
 #include <boost/asio.hpp>
 #include <iostream>
+#include <execinfo.h>
 
 #include "libusb_asio/libusb_service.h"
 #include "devices/FaoutManager.h"
@@ -159,6 +160,12 @@ int main() {
 		io_service.run();
 	} catch (std::exception& e) {
 		std::cerr << "Exception in Event Loop: " << e.what() << std::endl;
+		// get void*'s for all entries on the stack
+		// print out all the frames to stderr
+		void *array[20];
+		size_t size;
+		size = backtrace(array, 20);
+		backtrace_symbols_fd(array, size, STDERR_FILENO);
 	}
 	return 0;
 }
