@@ -117,7 +117,7 @@ int main() {
 
 		// add usb service
 		boost::asio::libusb_service libusb_service(io_service);
-		FaoutManager faout_manager(libusb_service);
+		FaoutManager faout_manager(io_service, libusb_service);
 		FaoutRpcHandler faout_rpc_handler(faout_manager);
 
 		// add network service
@@ -142,6 +142,15 @@ int main() {
 			packer_out << serial;
 			control_server.sendAll(buffer_out);
 		});
+		faout_manager.setStatusCallback([&](const std::string& serial, uint16_t status) {
+			auto buffer_out = std::make_shared<msgpack::sbuffer>();
+			msgpack::packer<msgpack::sbuffer> packer_out(buffer_out.get());
+			packer_out.pack_array(3);
+			packer_out.pack_int8(RPC_RCODE_STATUS);
+			packer_out << serial;
+			packer_out << status;
+			control_server.sendAll(buffer_out);
+		});
 
 		// add system signal handler
 		boost::asio::signal_set signals(io_service);
@@ -152,8 +161,9 @@ int main() {
 			[&](boost::system::error_code, int)
 			{
 				std::cout << "Shutting down" << std::endl;
-				libusb_service.stop();
+				faout_manager.stop();
 				control_server.stop();
+				libusb_service.stop();
 			}
 		);
 

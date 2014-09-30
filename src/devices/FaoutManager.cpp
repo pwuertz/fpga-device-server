@@ -1,7 +1,11 @@
 #include "FaoutManager.h"
 
-FaoutManager::FaoutManager(boost::asio::libusb_service& service) :
-	m_libusb_service(service),
+#include <chrono>
+
+FaoutManager::FaoutManager(boost::asio::io_service& io_service,
+		boost::asio::libusb_service& usb_service) :
+	m_timer(io_service),
+	m_libusb_service(usb_service),
 	m_device_map(),
 	m_serial_map(),
 	m_device_added_cb(),
@@ -38,10 +42,37 @@ FaoutManager::FaoutManager(boost::asio::libusb_service& service) :
 		}
 	});
 
-	// TODO: start periodic status updates of registered devices
+	// start periodic status updates of registered devices
+	_periodicStatusUpdates();
 }
 
 FaoutManager::~FaoutManager() {
+	stop();
+}
+
+void FaoutManager::_periodicStatusUpdates() {
+	// get status updates for all devices and emit callbacks
+	for (auto p: m_serial_map) {
+		try {
+			auto device = p.second;
+			if (device->updateStatus() && m_device_status_cb)
+				m_device_status_cb(p.first, device->lastStatus());
+		} catch (std::exception& e) {
+			std::cerr << "Error updating status of " << p.first;
+			std::cerr << ", " << e.what() << std::endl;
+		}
+	}
+	// schedule next update
+	m_timer.expires_from_now(std::chrono::milliseconds(FAOUT_MANAGER_UPDATE_DELAY_MS));
+	m_timer.async_wait([this](const boost::system::error_code& ec) {
+		if (!ec) {
+			_periodicStatusUpdates();
+		}
+	});
+}
+
+void FaoutManager::stop() {
+	m_timer.cancel();
 }
 
 bool FaoutManager::hasDevice(libusb_device* dev) {
