@@ -63,7 +63,9 @@ public:
 		auto device = m_manager.getDevice(serial);
 
 		// check which command to call on device
-		if (cmd == "writereg") {
+		if (cmd == "status") {
+			RETURN_RPC_VALUE(reply, device->lastStatus());
+		} else if (cmd == "writereg") {
 			uint8_t reg;
 			uint16_t value;
 			try {
