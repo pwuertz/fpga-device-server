@@ -125,7 +125,6 @@ int main() {
 
 		// add faout event handlers
 		faout_manager.setAddedCallback([&](const std::string& serial){
-			std::cout << "Added device: " << serial << std::endl;
 			auto buffer_out = std::make_shared<msgpack::sbuffer>();
 			msgpack::packer<msgpack::sbuffer> packer_out(buffer_out.get());
 			packer_out.pack_array(2);
@@ -134,7 +133,6 @@ int main() {
 			control_server.sendAll(buffer_out);
 		});
 		faout_manager.setRemovedCallback([&](const std::string& serial){
-			std::cout << "Removed device: " << serial << std::endl;
 			auto buffer_out = std::make_shared<msgpack::sbuffer>();
 			msgpack::packer<msgpack::sbuffer> packer_out(buffer_out.get());
 			packer_out.pack_array(2);

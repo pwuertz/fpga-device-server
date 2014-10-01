@@ -1,6 +1,49 @@
 #include "FaoutManager.h"
 
+#include <boost/algorithm/string.hpp>
 #include <chrono>
+
+
+class LibUsbDevice {
+public:
+	LibUsbDevice(libusb_device* dev) : m_dev_handle(nullptr) {
+		int r;
+		// read descriptor
+	    if ((r = libusb_get_device_descriptor(dev, &m_desc)) < 0) {
+	    	throw std::runtime_error(libusb_error_name(r));
+	    }
+
+	    if ((r = libusb_open(dev, &m_dev_handle)) < 0) {
+	    	throw std::runtime_error(libusb_error_name(r));
+	    }
+	}
+
+	void getStringDescriptor(std::string& str, uint8_t index) {
+		int r;
+		char buffer[256];
+	    if ((r = libusb_get_string_descriptor_ascii(m_dev_handle, index,
+	    		(unsigned char*) buffer, sizeof(buffer))) < 0) {
+	    	throw std::runtime_error(libusb_error_name(r));
+	    }
+	    str = std::string(buffer);
+	}
+
+	~LibUsbDevice() {
+		if (!m_dev_handle) libusb_close(m_dev_handle);
+	}
+
+	libusb_device_handle* m_dev_handle;
+	libusb_device_descriptor m_desc;
+};
+
+void getUsbDeviceStrings(libusb_device* dev,
+		std::string& manufacturer, std::string& product, std::string& serial) {
+	LibUsbDevice usbdev(dev);
+	usbdev.getStringDescriptor(manufacturer, usbdev.m_desc.iManufacturer);
+	usbdev.getStringDescriptor(product, usbdev.m_desc.iProduct);
+	usbdev.getStringDescriptor(serial, usbdev.m_desc.iSerialNumber);
+}
+
 
 FaoutManager::FaoutManager(boost::asio::io_service& io_service,
 		boost::asio::libusb_service& usb_service) :
@@ -12,7 +55,7 @@ FaoutManager::FaoutManager(boost::asio::io_service& io_service,
 	m_device_removed_cb(),
 	m_device_status_cb()
 {
-	// handler for new or removed faout devices
+	// handler for added or removed faout (ftdi) devices
 	int faout_vid = 0x0403;
 	int faout_pid = 0x6010;
 	m_libusb_service.addHotplugHandler(faout_vid, faout_pid, LIBUSB_HOTPLUG_MATCH_ANY,
@@ -20,23 +63,38 @@ FaoutManager::FaoutManager(boost::asio::io_service& io_service,
 		if (ev == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
 			if (!hasDevice(dev)) {
 				try {
-					// TODO: use serial for identifying faout devices?
-					auto faout = std::make_shared<FaoutDevice>(dev);
-					if (hasSerial(faout->m_serial)) {
-						std::cerr << "Not adding 2nd device with identical serial: " << faout->m_serial << std::endl;
-					} else {
-						m_device_map.insert(std::make_pair(dev, faout->shared_from_this()));
-						m_serial_map.insert(std::make_pair(faout->m_serial, faout->shared_from_this()));
-						if (m_device_added_cb) m_device_added_cb(faout->m_serial);
+					// get strings from usb device
+					std::string manufacturer, product, serial;
+					getUsbDeviceStrings(dev, manufacturer, product, serial);
+
+					// is the ftdi device a faout device?
+					std::cout << "New device: " << product << ", " << manufacturer << std::endl;
+					if (!boost::algorithm::starts_with(serial, "FAOUT")) {
+						std::cout << "Not identified as Faout device: " << serial << std::endl;
+						return;
 					}
+					// make sure the serial is unique
+					if (hasSerial(serial)) {
+						std::cerr << "Not adding device with identical serial: " << serial << std::endl;
+						return;
+					}
+					// add new device to manager
+					std::cout << "Adding Faout device: " << serial << std::endl;
+					auto faout = std::make_shared<FaoutDevice>(dev, serial);
+					m_device_map.insert(std::make_pair(dev, faout->shared_from_this()));
+					m_serial_map.insert(std::make_pair(faout->name(), faout->shared_from_this()));
+					if (m_device_added_cb) m_device_added_cb(faout->name());
+
 				} catch (const std::exception& e) {
 					std::cerr << "Adding device failed: " << e.what() << std::endl;
 				}
 			}
 		} else {
 			if (hasDevice(dev)) {
-				if (m_device_added_cb) m_device_removed_cb(m_device_map[dev]->m_serial);
-				m_serial_map.erase(m_device_map[dev]->m_serial);
+				const std::string& serial = m_device_map[dev]->name();
+				std::cout << "Removed Faout device: " << serial << std::endl;
+				if (m_device_added_cb) m_device_removed_cb(serial);
+				m_serial_map.erase(serial);
 				m_device_map.erase(dev);
 			}
 		}

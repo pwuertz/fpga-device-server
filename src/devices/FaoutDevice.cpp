@@ -5,36 +5,8 @@
 #include "../libftdi/ftdi.h"
 
 
-static std::string getDeviceSerial(libusb_device* dev) {
-	int r;
-
-	// get the device descriptor
-	struct libusb_device_descriptor desc;
-    if ((r = libusb_get_device_descriptor(dev, &desc)) < 0) {
-    	throw std::runtime_error(libusb_error_name(r));
-    }
-
-    // try to open device
-    libusb_device_handle* dev_handle;
-    if ((r = libusb_open(dev, &dev_handle)) < 0) {
-    	throw std::runtime_error(libusb_error_name(r));
-    }
-
-    // try to get device serial
-    char serial[256] = "";
-    if (libusb_get_string_descriptor_ascii(dev_handle, desc.iSerialNumber,
-    		(unsigned char*) serial, sizeof(serial)) < 0) {
-    	libusb_close(dev_handle);
-    	throw std::runtime_error("libusb_get_string_descriptor_ascii failed");
-    }
-    libusb_close(dev_handle);
-
-    return std::string(serial);
-}
-
-
-FaoutDevice::FaoutDevice(libusb_device* dev) :
-		m_serial(getDeviceSerial(dev)),
+FaoutDevice::FaoutDevice(libusb_device* dev, std::string name) :
+		m_name(std::move(name)),
 		m_ftdi(nullptr),
 		m_last_status(0xffff)
 {
@@ -179,4 +151,8 @@ bool FaoutDevice::writeRam(const uint16_t* data, unsigned int n) {
 		n_sent += n_packet;
 	}
 	return true;
+}
+
+const std::string& FaoutDevice::name() const {
+	return m_name;
 }

@@ -13,6 +13,9 @@ typedef std::function<void(const std::string&, uint16_t)> fn_device_status_cb;
 
 #define FAOUT_MANAGER_UPDATE_DELAY_MS 500
 
+void getUsbDeviceStrings(libusb_device* dev,
+		std::string& manufacturer, std::string& product, std::string& serial);
+
 class FaoutManager {
 public:
 	FaoutManager(const FaoutManager&) = delete;

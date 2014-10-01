@@ -9,8 +9,9 @@ class FaoutDevice : public std::enable_shared_from_this<FaoutDevice> {
 public:
 	FaoutDevice(const FaoutDevice&) = delete;
 	FaoutDevice& operator=(const FaoutDevice&) = delete;
-	FaoutDevice(libusb_device* dev);
+	FaoutDevice(libusb_device* dev, std::string name);
 	virtual ~FaoutDevice();
+	const std::string& name() const;
 
 	bool updateStatus();
 	uint16_t lastStatus();
@@ -19,9 +20,8 @@ public:
 	bool readReg(uint8_t addr, uint16_t* value);
 	bool writeRam(const uint16_t* data, unsigned int n);
 
-	const std::string m_serial;
-
 private:
+	const std::string m_name;
 	ftdi_context* m_ftdi;
 	uint16_t m_last_status;
 };
