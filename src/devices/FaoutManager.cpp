@@ -70,16 +70,16 @@ FaoutManager::FaoutManager(boost::asio::io_service& io_service,
 					// is the ftdi device a faout device?
 					std::cout << "New device: " << product << ", " << manufacturer << std::endl;
 					if (!boost::algorithm::starts_with(serial, "FAOUT")) {
-						std::cout << "Not identified as Faout device: " << serial << std::endl;
+						std::cout << "Not identified as Faout device - Serial=" << serial << std::endl;
 						return;
 					}
 					// make sure the serial is unique
 					if (hasSerial(serial)) {
-						std::cerr << "Not adding device with identical serial: " << serial << std::endl;
+						std::cerr << "Not adding device with duplicate Serial=" << serial << std::endl;
 						return;
 					}
 					// add new device to manager
-					std::cout << "Adding Faout device: " << serial << std::endl;
+					std::cout << "Adding device: Faout, Serial=" << serial << std::endl;
 					auto faout = std::make_shared<FaoutDevice>(dev, serial);
 					m_device_map.insert(std::make_pair(dev, faout->shared_from_this()));
 					m_serial_map.insert(std::make_pair(faout->name(), faout->shared_from_this()));
@@ -92,7 +92,7 @@ FaoutManager::FaoutManager(boost::asio::io_service& io_service,
 		} else {
 			if (hasDevice(dev)) {
 				const std::string& serial = m_device_map[dev]->name();
-				std::cout << "Removed Faout device: " << serial << std::endl;
+				std::cout << "Removed device: Faout, Serial=" << serial << std::endl;
 				if (m_device_added_cb) m_device_removed_cb(serial);
 				m_serial_map.erase(serial);
 				m_device_map.erase(dev);

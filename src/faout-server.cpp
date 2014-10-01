@@ -4,8 +4,8 @@
 
 #include "libusb_asio/libusb_service.h"
 #include "devices/FaoutManager.h"
-#include "network/ControlServer.h"
-#include "network/ControlHandler.h"
+#include "network/RequestHandler.h"
+#include "network/Server.h"
 
 #define RPC_RCODE_ERROR -1
 #define RPC_RCODE_OK 0
@@ -27,9 +27,9 @@
     return; \
 }
 
-class FaoutRpcHandler : public ControlHandler {
+class FaoutRpcHandler : public RequestHandler {
 public:
-	explicit FaoutRpcHandler(FaoutManager& manager) : ControlHandler(), m_manager(manager) {};
+	explicit FaoutRpcHandler(FaoutManager& manager) : RequestHandler(), m_manager(manager) {};
 	virtual ~FaoutRpcHandler() {};
 	virtual void handleRequest(msgpack::object& request, msgpack::packer<msgpack::sbuffer>& reply) {
 		// convert msgpack object to array of objects
@@ -121,7 +121,7 @@ int main() {
 		FaoutRpcHandler faout_rpc_handler(faout_manager);
 
 		// add network service
-		ControlServer control_server(9000, io_service, faout_rpc_handler);
+		Server server(9000, io_service, faout_rpc_handler);
 
 		// add faout event handlers
 		faout_manager.setAddedCallback([&](const std::string& serial){
@@ -130,7 +130,7 @@ int main() {
 			packer_out.pack_array(2);
 			packer_out.pack_int8(RPC_RCODE_ADDED);
 			packer_out << serial;
-			control_server.sendAll(buffer_out);
+			server.sendAll(buffer_out);
 		});
 		faout_manager.setRemovedCallback([&](const std::string& serial){
 			auto buffer_out = std::make_shared<msgpack::sbuffer>();
@@ -138,7 +138,7 @@ int main() {
 			packer_out.pack_array(2);
 			packer_out.pack_int8(RPC_RCODE_REMOVED);
 			packer_out << serial;
-			control_server.sendAll(buffer_out);
+			server.sendAll(buffer_out);
 		});
 		faout_manager.setStatusCallback([&](const std::string& serial, uint16_t status) {
 			auto buffer_out = std::make_shared<msgpack::sbuffer>();
@@ -147,7 +147,7 @@ int main() {
 			packer_out.pack_int8(RPC_RCODE_STATUS);
 			packer_out << serial;
 			packer_out << status;
-			control_server.sendAll(buffer_out);
+			server.sendAll(buffer_out);
 		});
 
 		// add system signal handler
@@ -160,20 +160,14 @@ int main() {
 			{
 				std::cout << "Shutting down" << std::endl;
 				faout_manager.stop();
-				control_server.stop();
+				server.stop();
 				libusb_service.stop();
 			}
 		);
 
 		io_service.run();
 	} catch (std::exception& e) {
-		std::cerr << "Exception in Event Loop: " << e.what() << std::endl;
-		// get void*'s for all entries on the stack
-		// print out all the frames to stderr
-		void *array[20];
-		size_t size;
-		size = backtrace(array, 20);
-		backtrace_symbols_fd(array, size, STDERR_FILENO);
+		std::cerr << "Unhandled exception in Event Loop: " << e.what() << std::endl;
 	}
 	return 0;
 }

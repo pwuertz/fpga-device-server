@@ -1,9 +1,9 @@
-#include "ControlServer.h"
+#include "Server.h"
 
 using boost::asio::ip::tcp;
 
 
-ControlServer::ControlServer(int port, boost::asio::io_service& service, ControlHandler& handler) :
+Server::Server(int port, boost::asio::io_service& service, RequestHandler& handler) :
 		m_handler(handler),
 		m_acceptor(service),
 		m_socket(service),
@@ -18,15 +18,15 @@ ControlServer::ControlServer(int port, boost::asio::io_service& service, Control
 	do_accept();
 }
 
-ControlServer::~ControlServer() {
+Server::~Server() {
 }
 
-void ControlServer::stop() {
+void Server::stop() {
 	m_acceptor.close();
 	m_connection_manager.stopAll();
 }
 
-void ControlServer::do_accept() {
+void Server::do_accept() {
 	m_acceptor.async_accept(m_socket,
 		[this](boost::system::error_code ec) {
 			// check whether the server was stopped
@@ -34,7 +34,7 @@ void ControlServer::do_accept() {
 
 			if (!ec) {
 				m_connection_manager.start(
-					std::make_shared<ControlConnection>(
+					std::make_shared<ClientConnection>(
 						std::move(m_socket), m_connection_manager, m_handler)
 				);
 			}
@@ -42,6 +42,6 @@ void ControlServer::do_accept() {
 		});
 }
 
-void ControlServer::sendAll(std::shared_ptr<msgpack::sbuffer>& buffer) {
+void Server::sendAll(std::shared_ptr<msgpack::sbuffer>& buffer) {
 	m_connection_manager.sendAll(buffer);
 }

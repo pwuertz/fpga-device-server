@@ -3,12 +3,12 @@
 
 #include <msgpack.hpp>
 
-class ControlHandler {
+class RequestHandler {
 public:
-	ControlHandler(const ControlHandler&) = delete;
-	ControlHandler& operator=(const ControlHandler&) = delete;
-	explicit ControlHandler() {};
-	virtual ~ControlHandler() {};
+	RequestHandler(const RequestHandler&) = delete;
+	RequestHandler& operator=(const RequestHandler&) = delete;
+	explicit RequestHandler() {};
+	virtual ~RequestHandler() {};
 
 	virtual void handleRequest(msgpack::object& request, msgpack::packer<msgpack::sbuffer>& reply) = 0;
 };

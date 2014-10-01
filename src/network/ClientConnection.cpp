@@ -5,14 +5,14 @@
  *      Author: pwuertz
  */
 
-#include "ControlConnection.h"
-#include "ControlConnectionManager.h"
+#include "ClientConnection.h"
+#include "ConnectionManager.h"
 
 using boost::asio::ip::tcp;
 
 
-ControlConnection::ControlConnection(boost::asio::ip::tcp::socket socket,
-		ControlConnectionManager& manager, ControlHandler& handler) :
+ClientConnection::ClientConnection(boost::asio::ip::tcp::socket socket,
+		ConnectionManager& manager, RequestHandler& handler) :
 		m_socket(std::move(socket)),
 		m_connection_manager(manager),
 		m_handler(handler),
@@ -24,14 +24,14 @@ ControlConnection::ControlConnection(boost::asio::ip::tcp::socket socket,
 	//std::string remote = m_socket.remote_endpoint().address().to_string();
 }
 
-ControlConnection::~ControlConnection() {
+ClientConnection::~ClientConnection() {
 }
 
-void ControlConnection::start() {
+void ClientConnection::start() {
 	do_read();
 }
 
-void ControlConnection::stop() {
+void ClientConnection::stop() {
 	if (m_socket.is_open()) {
 		try {
 			m_socket.shutdown(m_socket.shutdown_both);
@@ -43,7 +43,7 @@ void ControlConnection::stop() {
 	}
 }
 
-void ControlConnection::send(std::shared_ptr<msgpack::sbuffer> buffer) {
+void ClientConnection::send(std::shared_ptr<msgpack::sbuffer> buffer) {
 	// if there is no write in progress, schedule do_write() call
 	if (m_msgbuffer_out.empty()) {
 		auto self(shared_from_this());
@@ -55,7 +55,7 @@ void ControlConnection::send(std::shared_ptr<msgpack::sbuffer> buffer) {
 	m_msgbuffer_out.emplace_back(buffer);
 }
 
-void ControlConnection::do_read() {
+void ClientConnection::do_read() {
 	// reserve buffer for incoming data
 	m_msgbuffer_in.reserve_buffer(MSGPACK_UNPACKER_RESERVE_SIZE);
 
@@ -105,7 +105,7 @@ void ControlConnection::do_read() {
 		});
 }
 
-void ControlConnection::do_write() {
+void ClientConnection::do_write() {
 	if (m_msgbuffer_out.empty()) return;
 
 	auto packet = m_msgbuffer_out.front();
