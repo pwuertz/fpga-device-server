@@ -77,6 +77,7 @@ public:
 				RETURN_RPC_VALUE(reply, 0);
 			} else {
 				// TODO: handle device errors in some way?
+				std::cerr << "Error writing reg " << int(reg) << std::endl;
 				RETURN_RPC_ERROR(reply, "Device error");
 			}
 		} else if (cmd == "readreg") {
@@ -90,6 +91,7 @@ public:
 				RETURN_RPC_VALUE(reply, value);
 			} else {
 				// TODO: handle device errors in some way?
+				std::cerr << "Error reading reg (" << int(reg) << ")" << std::endl;
 				RETURN_RPC_ERROR(reply, "Device error");
 			}
 		} else if (cmd == "writeram") {
@@ -102,6 +104,7 @@ public:
 				RETURN_RPC_VALUE(reply, 0);
 			} else {
 				// TODO: handle device errors in some way?
+				std::cerr << "Error writing ram" << std::endl;
 				RETURN_RPC_ERROR(reply, "Device error");
 			}
 		}

@@ -97,10 +97,11 @@ bool FaoutDevice::readReg(uint8_t addr, uint16_t* value) {
 	int n_total = sizeof(uint16_t);
 	uint16_t result;
 	unsigned char* p = (unsigned char*) &result;
-	for (int i = 0; i < 20; ++i) {
+	for (int i = 0; i < 50; ++i) {
 		// try to read the remaining bytes
 		n = ftdi_read_data(m_ftdi, p + n_recv, n_total - n_recv);
 		if (n < 0) {
+			std::cerr << "FTDI read error " << n << std::endl;
 			return false;
 		}
 		n_recv += n;
@@ -112,6 +113,7 @@ bool FaoutDevice::readReg(uint8_t addr, uint16_t* value) {
 		}
 	}
 	if (n_recv != n_total) {
+		std::cerr << "FTDI read timeout" << std::endl;
 		return false;
 	}
 
@@ -135,20 +137,31 @@ bool FaoutDevice::writeRam(const uint16_t* data, unsigned int n) {
 	const unsigned int max_words = (1<<16)-1;
 	uint16_t out_buffer[2 + max_words];
 
-	unsigned int n_sent = 0;
-	while (n_sent != n) {
-		uint16_t n_packet = std::min(n-n_sent, max_words);
-		int n_packet_bytes = n_packet * sizeof(uint16_t);
+	unsigned int nwords_sent = 0;
+	while (nwords_sent != n) {
+		uint16_t nwords_packet = std::min(n-nwords_sent, max_words);
+		int nbytes_packet = nwords_packet * sizeof(uint16_t);
 		out_buffer[0] = be16toh(4 << 8);  // write ram cmd, no addr required
-		out_buffer[1] = be16toh(n_packet);
-		for (int i = 0; i < n_packet; ++i) {
-			out_buffer[i+2] = be16toh(data[n_sent + i]);
+		out_buffer[1] = be16toh(nwords_packet);
+		for (int i = 0; i < nwords_packet; ++i) {
+			out_buffer[i+2] = be16toh(data[nwords_sent + i]);
 		}
-		int r = ftdi_write_data(m_ftdi, (unsigned char*) out_buffer, n_packet_bytes);
-		if (r < 0 || (r != n_packet_bytes)) {
+
+		int offset = 0, i=0;
+		while (offset != nbytes_packet && i < 20) {
+			int r = ftdi_write_data(m_ftdi, ((unsigned char*) out_buffer)+offset, nbytes_packet-offset);
+			if (r < 0) {
+				std::cerr << "FTDI write error:" << r << std::endl;
+				return false;
+			}
+			offset += r;
+			++i;
+		}
+		if (offset != nbytes_packet) {
+			std::cerr << "FTDI write timeout" << std::endl;
 			return false;
 		}
-		n_sent += n_packet;
+		nwords_sent += nwords_packet;
 	}
 	return true;
 }
