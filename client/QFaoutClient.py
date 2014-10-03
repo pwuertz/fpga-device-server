@@ -73,6 +73,9 @@ if __name__ == "__main__":
     device = devices[0]
     print("Using: %s" % device)
     print("Status: %s" % client.get_device_status(device))
+
+    value = client.read_reg(device, reg=10)
+    print("Read register 10 (version): %d" % value)
     
     value = client.read_reg(device, reg=1)
     print("Read register 1: 0x%x" % value)
