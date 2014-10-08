@@ -16,9 +16,9 @@ public:
 	bool updateStatus();
 	uint16_t lastStatus();
 
-	bool writeReg(uint8_t addr, uint16_t value);
-	bool readReg(uint8_t addr, uint16_t* value);
-	bool writeRam(const uint16_t* data, unsigned int n);
+	void writeReg(uint8_t addr, uint16_t value);
+	void readReg(uint8_t addr, uint16_t* value);
+	void writeRam(const uint16_t* data, unsigned int n);
 
 private:
 	const std::string m_name;

@@ -77,19 +77,21 @@ FaoutDevice::~FaoutDevice() {
 	}
 }
 
-bool FaoutDevice::writeReg(uint8_t addr, uint16_t value) {
+void FaoutDevice::writeReg(uint8_t addr, uint16_t value) {
 	// send register write command
 	uint16_t wr_cmd[] = {htobe16((2<<8) | addr), htobe16(value)};
 	int n = ftdi_write_data(m_ftdi, (unsigned char*) wr_cmd, sizeof(wr_cmd));
-	return (n == sizeof(wr_cmd));
+	if (n != sizeof(wr_cmd)) {
+		throw std::runtime_error("FTDI write error");
+	}
 }
 
-bool FaoutDevice::readReg(uint8_t addr, uint16_t* value) {
+void FaoutDevice::readReg(uint8_t addr, uint16_t* value) {
 	// send register read command
 	uint16_t rd_cmd[] = {htobe16((1<<8) | addr)};
 	int n = ftdi_write_data(m_ftdi, (unsigned char*) rd_cmd, sizeof(rd_cmd));
 	if (n != sizeof(rd_cmd)) {
-		return false;
+		throw std::runtime_error("FTDI write error");
 	}
 
 	// wait for the response
@@ -97,12 +99,13 @@ bool FaoutDevice::readReg(uint8_t addr, uint16_t* value) {
 	int n_total = sizeof(uint16_t);
 	uint16_t result;
 	unsigned char* p = (unsigned char*) &result;
-	for (int i = 0; i < 50; ++i) {
+	// loop for a maximum duration of 1s
+	for (int i = 0; i < 100; ++i) {
 		// try to read the remaining bytes
 		n = ftdi_read_data(m_ftdi, p + n_recv, n_total - n_recv);
 		if (n < 0) {
 			std::cerr << "FTDI read error " << n << std::endl;
-			return false;
+			throw std::runtime_error("FTDI read error");
 		}
 		n_recv += n;
 		// continue reading if there are bytes left
@@ -114,18 +117,15 @@ bool FaoutDevice::readReg(uint8_t addr, uint16_t* value) {
 	}
 	if (n_recv != n_total) {
 		std::cerr << "FTDI read timeout" << std::endl;
-		return false;
+		throw std::runtime_error("FTDI read timeout");
 	}
 
 	*value = be16toh(result);
-	return true;
 }
 
 bool FaoutDevice::updateStatus() {
 	uint16_t old_status = m_last_status;
-	if (!readReg(0, &m_last_status)) {
-		// TODO: handle usb device error
-	}
+	readReg(0, &m_last_status);
 	return m_last_status != old_status;
 }
 
@@ -133,9 +133,15 @@ uint16_t FaoutDevice::lastStatus() {
 	return m_last_status;
 }
 
-bool FaoutDevice::writeRam(const uint16_t* data, unsigned int n) {
+void FaoutDevice::writeRam(const uint16_t* data, unsigned int n) {
 	const unsigned int max_words = (1<<16)-1;
 	uint16_t out_buffer[2 + max_words];
+
+	// store ram ptr
+	uint16_t lw, hw;
+	readReg(8, &lw); readReg(9, &hw);
+	uint32_t wr_ptr_before = (hw << 16) | lw;
+	std::cout << "Wr ptr: " << wr_ptr_before << std::endl;
 
 	unsigned int nwords_sent = 0;
 	while (nwords_sent != n) {
@@ -152,18 +158,22 @@ bool FaoutDevice::writeRam(const uint16_t* data, unsigned int n) {
 			int r = ftdi_write_data(m_ftdi, ((unsigned char*) out_buffer)+offset, nbytes_packet-offset);
 			if (r < 0) {
 				std::cerr << "FTDI write error:" << r << std::endl;
-				return false;
+				throw std::runtime_error("FTDI write error");
 			}
 			offset += r;
 			++i;
 		}
 		if (offset != nbytes_packet) {
 			std::cerr << "FTDI write timeout" << std::endl;
-			return false;
+			throw std::runtime_error("FTDI write timeout");
 		}
+
+		readReg(8, &lw); readReg(9, &hw);
+		uint32_t wr_ptr = (hw << 16) | lw;
+		std::cout << "Transferred: " << wr_ptr - wr_ptr_before << "/" << n << std::endl;
+
 		nwords_sent += nwords_packet;
 	}
-	return true;
 }
 
 const std::string& FaoutDevice::name() const {
