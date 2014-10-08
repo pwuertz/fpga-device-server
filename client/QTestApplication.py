@@ -33,9 +33,9 @@ class Controls(QtWidgets.QWidget):
             data = np.load("testsequence.npy")
             ldata = data.tolist()
             faout.write_ram(serial, ldata)
-            #ram_wr_ptr2 = faout.get_ram_write_ptr(serial)
-
+            ram_wr_ptr2 = faout.get_ram_write_ptr(serial)
             infostr = "Write position before: 0x%x\n" % ram_wr_ptr1
+            infostr += "Write position after: 0x%x\n" % ram_wr_ptr2
             QtWidgets.QMessageBox.information(self, "DRAM Info", infostr)
         bn_upload.clicked.connect(upload)
 
