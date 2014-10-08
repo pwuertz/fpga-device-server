@@ -4,6 +4,9 @@
 #include "FaoutDevice.h"
 #include "../libftdi/ftdi.h"
 
+#define CMD_READREG 1
+#define CMD_WRITEREG 2
+#define CMD_WRITERAM 4
 
 FaoutDevice::FaoutDevice(libusb_device* dev, std::string name) :
 		m_name(std::move(name)),
@@ -79,7 +82,7 @@ FaoutDevice::~FaoutDevice() {
 
 void FaoutDevice::writeReg(uint8_t addr, uint16_t value) {
 	// send register write command
-	uint16_t wr_cmd[] = {htobe16((2<<8) | addr), htobe16(value)};
+	uint16_t wr_cmd[] = {htobe16((CMD_WRITEREG<<8) | addr), htobe16(value)};
 	int n = ftdi_write_data(m_ftdi, (unsigned char*) wr_cmd, sizeof(wr_cmd));
 	if (n != sizeof(wr_cmd)) {
 		throw std::runtime_error("FTDI write error");
@@ -88,7 +91,7 @@ void FaoutDevice::writeReg(uint8_t addr, uint16_t value) {
 
 void FaoutDevice::readReg(uint8_t addr, uint16_t* value) {
 	// send register read command
-	uint16_t rd_cmd[] = {htobe16((1<<8) | addr)};
+	uint16_t rd_cmd[] = {htobe16((CMD_READREG<<8) | addr)};
 	int n = ftdi_write_data(m_ftdi, (unsigned char*) rd_cmd, sizeof(rd_cmd));
 	if (n != sizeof(rd_cmd)) {
 		throw std::runtime_error("FTDI write error");
@@ -133,46 +136,28 @@ uint16_t FaoutDevice::lastStatus() {
 	return m_last_status;
 }
 
-void FaoutDevice::writeRam(const uint16_t* data, unsigned int n) {
-	const unsigned int max_words = (1<<16)-1;
-	uint16_t out_buffer[2 + max_words];
+void FaoutDevice::writeRam(const uint16_t* data, size_t n) {
+	const size_t n_packet_max = (1<<16)-1;
+	uint16_t out_buffer[2 + n_packet_max];
 
-	// store ram ptr
-	uint16_t lw, hw;
-	readReg(8, &lw); readReg(9, &hw);
-	uint32_t wr_ptr_before = (hw << 16) | lw;
-	std::cout << "Wr ptr: " << wr_ptr_before << std::endl;
-
-	unsigned int nwords_sent = 0;
-	while (nwords_sent != n) {
-		uint16_t nwords_packet = std::min(n-nwords_sent, max_words);
-		int nbytes_packet = nwords_packet * sizeof(uint16_t);
-		out_buffer[0] = be16toh(4 << 8);  // write ram cmd, no addr required
-		out_buffer[1] = be16toh(nwords_packet);
-		for (int i = 0; i < nwords_packet; ++i) {
-			out_buffer[i+2] = be16toh(data[nwords_sent + i]);
+	size_t n_sent = 0;
+	while (n_sent != n) {
+		size_t n_packet = std::min(n-n_sent, n_packet_max);
+		out_buffer[0] = htobe16(CMD_WRITERAM<<8);
+		out_buffer[1] = htobe16(n_packet);
+		for (size_t i = 0; i < n_packet; ++i) {
+			out_buffer[2+i] = htobe16(data[n_sent+i]);
 		}
 
-		int offset = 0, i=0;
-		while (offset != nbytes_packet && i < 20) {
-			int r = ftdi_write_data(m_ftdi, ((unsigned char*) out_buffer)+offset, nbytes_packet-offset);
-			if (r < 0) {
-				std::cerr << "FTDI write error:" << r << std::endl;
-				throw std::runtime_error("FTDI write error");
-			}
-			offset += r;
-			++i;
-		}
-		if (offset != nbytes_packet) {
-			std::cerr << "FTDI write timeout" << std::endl;
-			throw std::runtime_error("FTDI write timeout");
+		size_t packet_bytes = sizeof(uint16_t) * (2 + n_packet);
+		int n = ftdi_write_data(m_ftdi, (unsigned char*) out_buffer, packet_bytes);
+		if (n <= 0) {
+			throw std::runtime_error("FTDI write error");
+		} else if (n < int(packet_bytes)) {
+			throw std::runtime_error("FTDI unhandled partial write");
 		}
 
-		readReg(8, &lw); readReg(9, &hw);
-		uint32_t wr_ptr = (hw << 16) | lw;
-		std::cout << "Transferred: " << wr_ptr - wr_ptr_before << "/" << n << std::endl;
-
-		nwords_sent += nwords_packet;
+		n_sent += n_packet;
 	}
 }
 

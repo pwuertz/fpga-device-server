@@ -18,7 +18,7 @@ public:
 
 	void writeReg(uint8_t addr, uint16_t value);
 	void readReg(uint8_t addr, uint16_t* value);
-	void writeRam(const uint16_t* data, unsigned int n);
+	void writeRam(const uint16_t* data, size_t n);
 
 private:
 	const std::string m_name;
