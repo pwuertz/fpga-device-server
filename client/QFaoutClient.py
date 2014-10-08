@@ -1,6 +1,6 @@
 from FaoutClientBase import FaoutClientBase
 from PyQt5 import QtCore, QtNetwork
-from qao.io.messageBus import DEFAULT_TIMEOUT
+
 
 class QFaoutClient(QtCore.QObject, FaoutClientBase):
     DEFAULT_TIMEOUT = 5
@@ -23,7 +23,7 @@ class QFaoutClient(QtCore.QObject, FaoutClientBase):
         self.__socket = QtNetwork.QTcpSocket()
         self.__socket.readyRead.connect(self._handle_ready_read)
         self.__socket.connectToHost(host, port)
-        self.__socket.waitForConnected(DEFAULT_TIMEOUT * 1000)
+        self.__socket.waitForConnected(QFaoutClient.DEFAULT_TIMEOUT * 1000)
 
     def _handle_ready_read(self):
         if self.__socket.bytesAvailable():
@@ -44,7 +44,7 @@ class QFaoutClient(QtCore.QObject, FaoutClientBase):
                 print("error handling pending events: %s" % e)
 
     def _handle_require_data(self):
-        ready = self.__socket.waitForReadyRead(DEFAULT_TIMEOUT * 1000)
+        ready = self.__socket.waitForReadyRead(QFaoutClient.DEFAULT_TIMEOUT * 1000)
         if not ready:
             raise RuntimeError("no response from server")
         data = self.__socket.read(8*1024)
