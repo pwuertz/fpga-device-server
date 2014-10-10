@@ -41,6 +41,8 @@
 							<tool id="cdt.managedbuild.tool.gnu.cpp.linker.exe.debug.1268317367" name="GCC C++ Linker" superClass="cdt.managedbuild.tool.gnu.cpp.linker.exe.debug">
 								<option id="gnu.cpp.link.option.libs.532292108" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="boost_system"/>
+									<listOptionValue builtIn="false" value="rt"/>
+									<listOptionValue builtIn="false" value="udev"/>
 									<listOptionValue builtIn="false" value="msgpack"/>
 									<listOptionValue builtIn="false" value="pthread"/>
 									<listOptionValue builtIn="false" value="usb-1.0"/>
