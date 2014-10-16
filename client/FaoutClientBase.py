@@ -80,6 +80,9 @@ class FaoutClientBase(object):
     def sequence_stop(self, serial):
         self.write_reg(serial, 0, 0x1 << 2)
 
+    def set_clock_extern(self, serial, extern):
+        self.write_reg(serial, 0, bool(extern) << 3)
+
     @staticmethod
     def __status_to_dict(status_val):
         return {
@@ -90,6 +93,8 @@ class FaoutClientBase(object):
             "sdram_full": bool(status_val & 1<<7),
             "seq_error": bool(status_val & 1<<8),
             "comm_error": bool(status_val & 1<<9),
+            "clk_ext_valid": bool(status_val & 1<<10),
+            "clk_ext_selected": bool(status_val & 1<<11),
         }
 
     def get_ram_read_ptr(self, serial):
@@ -178,6 +183,8 @@ if __name__ == "__main__":
     
     client.write_reg(device, reg=1, val=value+1)
     print("Write register 1: 0x%x" % (value+1))
+
+    client.write_reg(device, reg=11, val=1)
 
     print("")
     print("Waiting for events")

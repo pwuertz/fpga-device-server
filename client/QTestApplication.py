@@ -27,6 +27,8 @@ class Controls(QtWidgets.QWidget):
         bn_stop.clicked.connect(lambda: faout.sequence_stop(serial))
         bn_reset = QtWidgets.QPushButton("Reset")
         bn_reset.clicked.connect(lambda: faout.sequence_reset(serial))
+        bn_resetclock = QtWidgets.QPushButton("Reset Ext Clock")
+        bn_resetclock.clicked.connect(lambda: faout.write_reg(serial, 0, 0x1 << 3))
         bn_upload = QtWidgets.QPushButton("Upload")
         def upload():
             ram_wr_ptr1 = faout.get_ram_write_ptr(serial)
@@ -43,6 +45,7 @@ class Controls(QtWidgets.QWidget):
         layout.addWidget(bn_stop)
         layout.addWidget(bn_reset)
         layout.addWidget(bn_upload)
+        layout.addWidget(bn_resetclock)
 
 
 class Status(QtWidgets.QWidget):
@@ -78,6 +81,7 @@ app = QtWidgets.QApplication([])
 faout = QFaoutClient("localhost", 9000)
 serial = faout.get_device_list()[0]
 print("Connected to server, using device %s" % serial)
+print("Firmware version: %d" % faout.read_reg(serial, reg=10))
 
 win = Main()
 win.show()
