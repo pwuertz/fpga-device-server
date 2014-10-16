@@ -18,7 +18,7 @@ int main() {
 		FaoutRequestHandler rpc_handler(faout_manager);
 
 		// add network service
-		Server server(9000, io_service, rpc_handler);
+		Server server(9001, io_service, rpc_handler);
 
 		// add handlers for FaoutManager events
 		faout_manager.setAddedCallback([&](const std::string& serial){

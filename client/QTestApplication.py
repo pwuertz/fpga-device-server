@@ -78,7 +78,7 @@ class Main(QtWidgets.QWidget):
 
 app = QtWidgets.QApplication([])
 
-faout = QFaoutClient("localhost", 9000)
+faout = QFaoutClient("localhost", 9001)
 serial = faout.get_device_list()[0]
 print("Connected to server, using device %s" % serial)
 print("Firmware version: %d" % faout.read_reg(serial, reg=10))

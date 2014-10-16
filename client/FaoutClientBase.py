@@ -129,7 +129,7 @@ class FaoutClientBase(object):
 class SimpleFaoutClient(FaoutClientBase):
     DEFAULT_TIMEOUT = 5
 
-    def __init__(self, host, port=9000):
+    def __init__(self, host, port=9001):
         FaoutClientBase.__init__(self,
                                  send_data_cb=self._handle_send_data,
                                  require_data_cb=self._handle_require_data)
