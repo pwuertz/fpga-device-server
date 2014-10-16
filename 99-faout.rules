@@ -1,0 +1,2 @@
+# udev rule: allow rw for ftdi devices with "TU KL" as manufacturer string
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTR{manufacturer}=="TU KL", MODE="0666"
