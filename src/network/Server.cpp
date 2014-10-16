@@ -11,6 +11,7 @@ Server::Server(int port, boost::asio::io_service& service, RequestHandler& handl
 {
 	tcp::endpoint ep4(tcp::v4(), port);
 	m_acceptor.open(ep4.protocol());
+	m_acceptor.set_option(tcp::acceptor::reuse_address(true));
 	m_acceptor.bind(ep4);
 	m_acceptor.listen();
 	std::cout << "Control server running - " <<
