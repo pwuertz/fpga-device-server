@@ -1,1 +1,10 @@
 Application for managing multiple Faout devices via TCP.
+
+Requirements for building faout-server on Raspbian (wheezy):
+gcc-4.8
+g++-4.8
+libmsgpack-dev
+libboost-system1.50-dev
+libboost-chrono1.50-dev
+libudev-dev
+libusb 1.0.16 or higher (for example: compile libusb-1.0.a on PI for linking faour-server)
