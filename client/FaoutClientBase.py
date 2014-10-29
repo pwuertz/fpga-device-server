@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from docutils.nodes import classifier
 import msgpack
 import socket
+
 
 class FaoutClientBase(object):
     def __init__(self, send_data_cb, require_data_cb, events_pending_cb=None):
@@ -71,6 +71,8 @@ class FaoutClientBase(object):
         self.wait_for_answer()
         return
 
+    # TODO: should these functions be common for all FAOUT devices?
+
     def sequence_reset(self, serial):
         self.write_reg(serial, 0, 0x1 << 0)
 
@@ -80,8 +82,15 @@ class FaoutClientBase(object):
     def sequence_stop(self, serial):
         self.write_reg(serial, 0, 0x1 << 2)
 
+    def get_version(self, serial):
+        return self.read_reg(serial, 1)
+
     def set_clock_extern(self, serial, extern):
-        self.write_reg(serial, 0, bool(extern) << 3)
+        # TODO: check for extern clock valid, maybe try reset
+        # self.write_reg(serial, 0, bool(extern) << 3)
+        self.write_reg(serial, 2, bool(extern))
+
+    # TODO: the following functions are device dependent
 
     @staticmethod
     def __status_to_dict(status_val):
@@ -98,32 +107,24 @@ class FaoutClientBase(object):
         }
 
     def get_ram_read_ptr(self, serial):
-        rd_lw = self.read_reg(serial, 6)
-        rd_hw = self.read_reg(serial, 7)
+        rd_lw = self.read_reg(serial, 16)
+        rd_hw = self.read_reg(serial, 17)
         return (rd_hw << 16) | rd_lw
 
     def get_ram_write_ptr(self, serial):
-        wr_lw = self.read_reg(serial, 8)
-        wr_hw = self.read_reg(serial, 9)
+        wr_lw = self.read_reg(serial, 18)
+        wr_hw = self.read_reg(serial, 19)
         return (wr_hw << 16) | wr_lw
 
-    def write_dac1(self, serial, value):
-        self.write_reg(serial, 3, value)
+    def write_dac(self, serial, dac_index, value):
+        if dac_index < 0 or dac_index >= 6:
+            raise ValueError("dac_index out of bounds")
+        self.write_reg(serial, 8+dac_index, value)
 
-    def write_dac2(self, serial, value):
-        self.write_reg(serial, 4, value)
-
-    def read_dac1(self, serial):
-        return self.read_reg(serial, 3)
-
-    def read_dac2(self, serial):
-        return self.read_reg(serial, 4)
-
-    def write_display(self, serial, value):
-        self.write_reg(serial, 1, value)
-
-    def read_display(self, serial):
-        return self.read_reg(serial, 1)
+    def read_dac(self, serial, dac_index):
+        if dac_index < 0 or dac_index >= 6:
+            raise ValueError("dac_index out of bounds")
+        return self.read_reg(serial, 8+dac_index)
 
 
 class SimpleFaoutClient(FaoutClientBase):
@@ -175,19 +176,18 @@ if __name__ == "__main__":
     print("Using: %s" % device)
     print("Status: %s" % client.get_device_status(device))
 
-    value = client.read_reg(device, reg=10)
-    print("Read register 10 (version): %d" % value)
+    value = client.get_version(device)
+    print("Device version: %d" % value)
 
-    value = client.read_reg(device, reg=1)
-    print("Read register 1: 0x%x" % value)
+    value = client.read_dac(device, 0)
+    print("Read analog output 1: 0x%x" % value)
     
-    client.write_reg(device, reg=1, val=value+1)
-    print("Write register 1: 0x%x" % (value+1))
-
-    client.write_reg(device, reg=11, val=1)
+    client.write_dac(device, 0, value+1)
+    print("Write analog output 1: 0x%x" % (value+1))
 
     print("")
     print("Waiting for events")
     while 1:
         for event in client.wait_for_events():
             print(event)
+

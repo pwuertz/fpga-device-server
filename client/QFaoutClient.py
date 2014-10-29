@@ -74,14 +74,14 @@ if __name__ == "__main__":
     print("Using: %s" % device)
     print("Status: %s" % client.get_device_status(device))
 
-    value = client.read_reg(device, reg=10)
-    print("Read register 10 (version): %d" % value)
+    value = client.get_version(device)
+    print("Device version: %d" % value)
+
+    value = client.read_dac(device, 0)
+    print("Read analog output 1: 0x%x" % value)
     
-    value = client.read_reg(device, reg=1)
-    print("Read register 1: 0x%x" % value)
-    
-    client.write_reg(device, reg=1, val=value+1)
-    print("Write register 1: 0x%x" % (value+1))
+    client.write_dac(device, 0, value+1)
+    print("Write analog output 1: 0x%x" % (value+1))
 
     # setup signal handlers for asynchronous events
     def added(dev):
@@ -106,3 +106,4 @@ if __name__ == "__main__":
     print("")
     print("Waiting for events")
     app.exec_()
+

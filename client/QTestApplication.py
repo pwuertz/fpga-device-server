@@ -1,3 +1,5 @@
+assert 0, "Test Application needs to be adapted to FAout6"
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 from QFaoutClient import QFaoutClient
 import numpy as np
