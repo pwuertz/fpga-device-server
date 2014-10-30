@@ -75,6 +75,7 @@ FaoutDevice::FaoutDevice(libusb_device* dev, std::string name) :
 
 FaoutDevice::~FaoutDevice() {
 	if (m_ftdi) {
+		ftdi_set_bitmode(m_ftdi, 0xfb, BITMODE_RESET);
 		ftdi_usb_close(m_ftdi);
 		ftdi_free(m_ftdi);
 	}
