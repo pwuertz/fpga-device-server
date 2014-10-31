@@ -1,5 +1,3 @@
-assert 0, "Test Application needs to be adapted to FAout6"
-
 from PyQt5 import QtCore, QtGui, QtWidgets
 from QFaoutClient import QFaoutClient
 import numpy as np
@@ -7,20 +5,25 @@ import numpy as np
 class Controls(QtWidgets.QWidget):
     def __init__(self):
         QtWidgets.QWidget.__init__(self)
-        sl1 = QtWidgets.QSlider()
-        sl2 = QtWidgets.QSlider()
-        sl1.setRange(0, 1000)
-        sl2.setRange(0, 1000)
+
+        def gen_write_func(ch):        
+            def write_func(val):
+                val = int(0xffff * (val/1000.))
+                print("Writing ch%d: %x" % (ch, val))
+                faout.write_dac(serial, ch, val)
+            return write_func
 
         layout = QtWidgets.QVBoxLayout(self)
 
         layout_sl = QtWidgets.QHBoxLayout()
-        layout_sl.addWidget(sl1)
-        layout_sl.addWidget(sl2)
-        sl1.valueChanged.connect(lambda v: faout.write_dac1(serial, int(0xffff * (v/1000.) )))
-        sl2.valueChanged.connect(lambda v: faout.write_dac2(serial, int(0xffff * (v/1000.) )))
-        sl1.valueChanged.connect(lambda v: faout.write_display(serial, int(0xff * (v/1000.) )))
-        sl2.valueChanged.connect(lambda v: faout.write_display(serial, int(0xff * (v/1000.) )))
+        self.sliders = []
+        for i in range(6):
+            slider = QtWidgets.QSlider()
+            slider.setRange(0, 1000)
+            slider.valueChanged.connect(gen_write_func(i))
+            self.sliders.append(slider)
+            layout_sl.addWidget(slider)
+
         layout.addLayout(layout_sl)
 
         bn_start = QtWidgets.QPushButton("Start")
@@ -42,6 +45,12 @@ class Controls(QtWidgets.QWidget):
             infostr += "Write position after: 0x%x\n" % ram_wr_ptr2
             QtWidgets.QMessageBox.information(self, "DRAM Info", infostr)
         bn_upload.clicked.connect(upload)
+
+        def get_values():
+            for i in range(6):
+                v = faout.read_dac(serial, i)
+                self.sliders[i].setValue(int(v * (1./0xffff) * 1000.))
+        get_values()
 
         layout.addWidget(bn_start)
         layout.addWidget(bn_stop)
@@ -83,7 +92,7 @@ app = QtWidgets.QApplication([])
 faout = QFaoutClient("localhost", 9001)
 serial = faout.get_device_list()[0]
 print("Connected to server, using device %s" % serial)
-print("Firmware version: %d" % faout.read_reg(serial, reg=10))
+print("Firmware version: %d" % faout.get_version(serial))
 
 win = Main()
 win.show()
