@@ -19,6 +19,7 @@ class FaoutClientBase(object):
     def _parse_bytes(self, data):
         self.__unpacker.feed(data)
         for packet in self.__unpacker:
+            packet = list(packet)
             try:
                 rcode = int(packet[0])
             except:
@@ -166,7 +167,14 @@ class SimpleFaoutClient(FaoutClientBase):
 
 
 if __name__ == "__main__":
-    client = SimpleFaoutClient("localhost")
+    import argparse
+    parser = argparse.ArgumentParser(description='Faout-Client Example')
+    parser.add_argument('host', nargs='?', default='localhost')
+    parser.add_argument('port', nargs='?', type=int, default=9001)
+    args = parser.parse_args()
+
+    client = SimpleFaoutClient(args.host, args.port)
+    print 'Connected to %s' % args.host
     devices = client.get_device_list()
     assert devices, "No devices connected"
     print("Connected devices: %s" % (", ".join(devices)))

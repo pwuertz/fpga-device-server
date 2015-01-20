@@ -10,7 +10,7 @@ class Controls(QtWidgets.QWidget):
             def write_func(val):
                 val = int(0xffff * (val/1000.))
                 print("Writing ch%d: %x" % (ch, val))
-                faout.write_dac(serial, ch, val)
+                client.write_dac(serial, ch, val)
             return write_func
 
         layout = QtWidgets.QVBoxLayout(self)
@@ -27,20 +27,20 @@ class Controls(QtWidgets.QWidget):
         layout.addLayout(layout_sl)
 
         bn_start = QtWidgets.QPushButton("Start")
-        bn_start.clicked.connect(lambda: faout.sequence_start(serial))
+        bn_start.clicked.connect(lambda: client.sequence_start(serial))
         bn_stop = QtWidgets.QPushButton("Stop")
-        bn_stop.clicked.connect(lambda: faout.sequence_stop(serial))
+        bn_stop.clicked.connect(lambda: client.sequence_stop(serial))
         bn_reset = QtWidgets.QPushButton("Reset")
-        bn_reset.clicked.connect(lambda: faout.sequence_reset(serial))
+        bn_reset.clicked.connect(lambda: client.sequence_reset(serial))
         bn_resetclock = QtWidgets.QPushButton("Reset Ext Clock")
-        bn_resetclock.clicked.connect(lambda: faout.write_reg(serial, 0, 0x1 << 3))
+        bn_resetclock.clicked.connect(lambda: client.write_reg(serial, 0, 0x1 << 3))
         bn_upload = QtWidgets.QPushButton("Upload")
         def upload():
-            ram_wr_ptr1 = faout.get_ram_write_ptr(serial)
+            ram_wr_ptr1 = client.get_ram_write_ptr(serial)
             data = np.load("testsequence.npy")
             ldata = data.tolist()
-            faout.write_ram(serial, ldata)
-            ram_wr_ptr2 = faout.get_ram_write_ptr(serial)
+            client.write_ram(serial, ldata)
+            ram_wr_ptr2 = client.get_ram_write_ptr(serial)
             infostr = "Write position before: 0x%x\n" % ram_wr_ptr1
             infostr += "Write position after: 0x%x\n" % ram_wr_ptr2
             QtWidgets.QMessageBox.information(self, "DRAM Info", infostr)
@@ -48,7 +48,7 @@ class Controls(QtWidgets.QWidget):
 
         def get_values():
             for i in range(6):
-                v = faout.read_dac(serial, i)
+                v = client.read_dac(serial, i)
                 self.sliders[i].setValue(int(v * (1./0xffff) * 1000.))
         get_values()
 
@@ -65,18 +65,19 @@ class Status(QtWidgets.QWidget):
         layout = QtWidgets.QFormLayout(self)
 
         # build layout for status
-        status_dict = faout.get_device_status(serial)
+        status_dict = client.get_device_status(serial)
         self.status_labels = {}
         for k, v in status_dict.iteritems():
             label = QtWidgets.QLabel(str(v))
             layout.addRow(k, label)
             self.status_labels[k] = label
 
-        faout.statusUpdate.connect(self.handleStatus)
+        client.statusUpdate.connect(self.handleStatus)
 
     def handleStatus(self, serial, status_dict):
         for k, v in status_dict.iteritems():
             self.status_labels[k].setText(str(v))
+
 
 class Main(QtWidgets.QWidget):
     def __init__(self):
@@ -85,15 +86,28 @@ class Main(QtWidgets.QWidget):
         layout.addWidget(Controls())
         layout.addWidget(Status())
         self.resize(200, 400)
+        self.setWindowTitle("FAout Test App")
 
 
-app = QtWidgets.QApplication([])
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description='Faout-Client Example')
+    parser.add_argument('host', nargs='?', default='localhost')
+    parser.add_argument('port', nargs='?', type=int, default=9001)
+    args = parser.parse_args()
 
-faout = QFaoutClient("localhost", 9001)
-serial = faout.get_device_list()[0]
-print("Connected to server, using device %s" % serial)
-print("Firmware version: %d" % faout.get_version(serial))
+    app = QtWidgets.QApplication([])
 
-win = Main()
-win.show()
-app.exec_()
+    client = QFaoutClient(args.host, args.port)
+    print 'Connected to %s' % args.host
+    devices = client.get_device_list()
+    assert devices, "No devices connected"
+    print("Connected devices: %s" % (", ".join(devices)))
+    serial = client.get_device_list()[0]
+    print("Using device %s" % serial)
+    print("Firmware version: %d" % client.get_version(serial))
+
+    win = Main()
+    win.show()
+    app.exec_()
+

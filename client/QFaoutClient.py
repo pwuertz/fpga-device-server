@@ -61,10 +61,17 @@ class QFaoutClient(QtCore.QObject, FaoutClientBase):
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description='Faout-Client Example')
+    parser.add_argument('host', nargs='?', default='localhost')
+    parser.add_argument('port', nargs='?', type=int, default=9001)
+    args = parser.parse_args()
+
     from PyQt5 import QtCore
     app = QtCore.QCoreApplication([])
 
-    client = QFaoutClient("localhost")
+    client = QFaoutClient(args.host, args.port)
+    print 'Connected to %s' % args.host
     devices = client.get_device_list()
     assert devices, "No devices connected"
     print("Connected devices: %s" % (", ".join(devices)))
