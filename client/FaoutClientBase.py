@@ -2,6 +2,8 @@
 import msgpack
 import socket
 
+REG_CMD = 0
+REG_CONF = 2
 
 class FaoutClientBase(object):
     def __init__(self, send_data_cb, require_data_cb, events_pending_cb=None):
@@ -75,21 +77,46 @@ class FaoutClientBase(object):
     # TODO: should these functions be common for all FAOUT devices?
 
     def sequence_reset(self, serial):
-        self.write_reg(serial, 0, 0x1 << 0)
+        self.write_reg(serial, REG_CMD, 0x1 << 0)
 
     def sequence_start(self, serial):
-        self.write_reg(serial, 0, 0x1 << 1)
+        self.write_reg(serial, REG_CMD, 0x1 << 1)
+
+    def sequence_arm(self, serial):
+        self.write_reg(serial, REG_CMD, 0x1 << 4)
 
     def sequence_stop(self, serial):
-        self.write_reg(serial, 0, 0x1 << 2)
+        self.write_reg(serial, REG_CMD, 0x1 << 2)
 
     def get_version(self, serial):
         return self.read_reg(serial, 1)
 
-    def set_clock_extern(self, serial, extern):
-        # TODO: check for extern clock valid, maybe try reset
+    def get_config_bit(self, serial, bit):
+        conf_reg = self.read_reg(serial, REG_CONF)
+        return bool(conf_reg & (1 << bit))
+
+    def set_config_bit(self, serial, bit, enabled):
+        conf_reg = self.read_reg(serial, REG_CONF)
+        if enabled:
+            conf_reg |= (1 << bit)
+        else:
+            conf_reg &= ~(1 << bit)
+        self.write_reg(serial, REG_CONF, conf_reg)
+
+    def get_clock_extern(self, serial):
+        return self.get_config_bit(serial, 0)
+
+    def set_clock_extern(self, serial, enabled):
+        # TODO: check for clk_ext_valid, maybe try PLL reset
         # self.write_reg(serial, 0, bool(extern) << 3)
-        self.write_reg(serial, 2, bool(extern))
+        return self.set_config_bit(serial, 0, enabled)
+
+    def get_auto_arm(self, serial):
+        return self.get_config_bit(serial, 1)
+
+    def set_auto_arm(self, serial, enabled):
+        return self.set_config_bit(serial, 1, enabled)
+
 
     # TODO: the following functions are device dependent
 

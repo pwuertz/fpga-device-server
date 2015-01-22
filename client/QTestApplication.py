@@ -9,7 +9,6 @@ class Controls(QtWidgets.QWidget):
         def gen_write_func(ch):        
             def write_func(val):
                 val = int(0xffff * (val/1000.))
-                print("Writing ch%d: %x" % (ch, val))
                 client.write_dac(serial, ch, val)
             return write_func
 
@@ -26,6 +25,8 @@ class Controls(QtWidgets.QWidget):
 
         layout.addLayout(layout_sl)
 
+        bn_arm = QtWidgets.QPushButton("Arm")
+        bn_arm.clicked.connect(lambda: client.sequence_arm(serial))
         bn_start = QtWidgets.QPushButton("Start")
         bn_start.clicked.connect(lambda: client.sequence_start(serial))
         bn_stop = QtWidgets.QPushButton("Stop")
@@ -52,6 +53,7 @@ class Controls(QtWidgets.QWidget):
                 self.sliders[i].setValue(int(v * (1./0xffff) * 1000.))
         get_values()
 
+        layout.addWidget(bn_arm)
         layout.addWidget(bn_start)
         layout.addWidget(bn_stop)
         layout.addWidget(bn_reset)
@@ -79,12 +81,30 @@ class Status(QtWidgets.QWidget):
             self.status_labels[k].setText(str(v))
 
 
+class Config(QtWidgets.QWidget):
+    def __init__(self):
+        QtWidgets.QWidget.__init__(self)
+        layout = QtWidgets.QFormLayout(self)
+
+        # build layout for config register
+        cb_clk_ext = QtWidgets.QCheckBox()
+        cb_clk_ext.setChecked(client.get_clock_extern(serial))
+        cb_clk_ext.toggled.connect(lambda enabled: client.set_clock_extern(serial, enabled))
+        cb_auto_arm = QtWidgets.QCheckBox()
+        cb_auto_arm.setChecked(client.get_auto_arm(serial))
+        cb_auto_arm.toggled.connect(lambda enabled: client.set_auto_arm(serial, enabled))
+
+        layout.addRow("Clock Ext", cb_clk_ext)
+        layout.addRow("Auto Arm", cb_auto_arm)
+
+
 class Main(QtWidgets.QWidget):
     def __init__(self):
         QtWidgets.QWidget.__init__(self)
         layout = QtWidgets.QHBoxLayout(self)
         layout.addWidget(Controls())
         layout.addWidget(Status())
+        layout.addWidget(Config())
         self.resize(200, 400)
         self.setWindowTitle("FAout Test App")
 
