@@ -2,6 +2,8 @@ import inspect
 import numpy as np
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+from IPython.qt.console.rich_ipython_widget import RichIPythonWidget, IPythonWidget
+from IPython.qt.inprocess import QtInProcessKernelManager
 from QFaoutClient import QFaoutClient
 
 
@@ -9,8 +11,10 @@ class Controls(QtWidgets.QWidget):
     def __init__(self, device):
         QtWidgets.QWidget.__init__(self)
 
-        layout = QtWidgets.QVBoxLayout(self)
+        # sliders for controlling the outputs
+        self.slider_widget = Sliders(device)
 
+        # buttons for commands
         bn_arm = QtWidgets.QPushButton("Arm")
         bn_arm.clicked.connect(lambda: device.sequence_arm())
         bn_start = QtWidgets.QPushButton("Start")
@@ -33,14 +37,18 @@ class Controls(QtWidgets.QWidget):
             QtWidgets.QMessageBox.information(self, "DRAM Info", infostr)
         bn_upload.clicked.connect(upload)
 
-        self.slider_widget = Sliders(device)
+        # build layout
+        layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self.slider_widget)
-        layout.addWidget(bn_arm)
-        layout.addWidget(bn_start)
-        layout.addWidget(bn_stop)
-        layout.addWidget(bn_reset)
-        layout.addWidget(bn_upload)
-        layout.addWidget(bn_resetclock)
+
+        layout_bns = QtWidgets.QGridLayout()
+        layout.addLayout(layout_bns)
+        layout_bns.addWidget(bn_arm, 0, 0)
+        layout_bns.addWidget(bn_start, 0, 1)
+        layout_bns.addWidget(bn_stop, 0, 2)
+        layout_bns.addWidget(bn_reset, 0, 3)
+        layout_bns.addWidget(bn_upload, 1, 0, 1, 2)
+        layout_bns.addWidget(bn_resetclock, 1, 2, 1, 2)
 
 
 class Sliders(QtWidgets.QWidget):
@@ -118,6 +126,8 @@ class DeviceMeta(type):
             args = inspect.getargspec(o).args
             if len(args) >= 2 and args[1] == "serial":
                 dct[n] = func_wrapper_gen(o)
+                dct[n].__doc__ = o.__doc__
+                dct[n].__name__ = o.__name__
         return super(DeviceMeta, cls).__new__(cls, name, parents, dct)
 
 
@@ -127,6 +137,12 @@ class Device(object):
     def __init__(self, client, serial):
         self.client = client
         self.serial = serial
+
+    def __str__(self):
+        return self.serial
+
+    def __repr__(self):
+        return "<Device: %s>" % self.serial
 
 
 class DeviceWidget(QtWidgets.QWidget):
@@ -148,29 +164,48 @@ class DeviceWidget(QtWidgets.QWidget):
 class Main(QtWidgets.QWidget):
     def __init__(self, client):
         QtWidgets.QWidget.__init__(self)
-        self.client = client        
-        
-        layout = QtWidgets.QHBoxLayout(self)
-        
+        self.client = client
+        self.devices = []
+
+        # build layout
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # tab widget for each connected device
         self.device_tabs = QtWidgets.QTabWidget()
         layout.addWidget(self.device_tabs)
-        self.resize(300, 500)
-        self.setWindowTitle("FAout Test Application")
 
+        # add devices that are already present and handlers for hotplugging
         for serial in client.get_device_list():
             self.addDevice(serial)
         client.addedDevice.connect(self.addDevice)
         client.removedDevice.connect(self.removeDevice)
+
+        # ipython console for scripting
+        kernel_manager = QtInProcessKernelManager()
+        kernel_manager.start_kernel()
+        kernel_client = kernel_manager.client()
+        kernel_client.start_channels()
+        dct = {"client": client, "devices": self.devices}
+        kernel_manager.kernel.shell.push(dct)
+        self._console = IPythonWidget(font_size=9, banner="Environment:\n%s\n\n" % dct)
+        self._console.kernel_manager = kernel_manager
+        self._console.kernel_client = kernel_client
+        layout.addWidget(self._console)
+
+        self.resize(300, 600)
+        self.setWindowTitle("FAout Test Application")
     
     def addDevice(self, serial):
         device = Device(self.client, serial)
         device_widget = DeviceWidget(device)
         self.device_tabs.addTab(device_widget, serial)
+        self.devices.append(device)
 
     def removeDevice(self, serial):
         for i in range(self.device_tabs.count()):
             if self.device_tabs.tabText(i) == serial:
                 self.device_tabs.removeTab(i)
+                del self.devices[i]
                 return
 
 
