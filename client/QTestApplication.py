@@ -21,16 +21,27 @@ class Controls(QtWidgets.QWidget):
         bn_start.clicked.connect(lambda: device.sequence_start())
         bn_stop = QtWidgets.QPushButton("Stop")
         bn_stop.clicked.connect(lambda: device.sequence_stop())
+        bn_hold = QtWidgets.QPushButton("Hold")
+        bn_hold.clicked.connect(lambda: device.sequence_hold())
         bn_reset = QtWidgets.QPushButton("Reset")
-        bn_reset.clicked.connect(lambda: device.sequence_reset())
-        bn_resetclock = QtWidgets.QPushButton("Reset Ext Clock")
-        bn_resetclock.clicked.connect(lambda: device.write_reg(0, 0x1 << 3))
+        bn_reset.clicked.connect(lambda: device.reset())
+        bn_resetclock = QtWidgets.QPushButton("Reset ClkExt")
+        bn_resetclock.clicked.connect(lambda: device.write_reg(0, 0x1 << 5))
+        bn_clear = QtWidgets.QPushButton("Clear")
+        bn_clear.clicked.connect(lambda: device.sequence_clear())
         bn_upload = QtWidgets.QPushButton("Upload")
         def upload():
             ram_wr_ptr1 = device.get_ram_write_ptr()
-            data = np.load("testsequence.npy")
-            ldata = data.tolist()
-            device.write_ram(ldata)
+            #data = np.load("testsequence.npy")
+            #seq_data = data.tolist()
+            seq_data = [
+                1<<15, 1,              # write delay=1
+                1<<0 | 1<<2, 11, 12,   # write regs 0 and 2
+                1<<14, 1<<3,           # write hold cmd
+                1<<4 | 1<<6, 13, 14,   # write regs 4 and 6
+                1<<15, 0               # write end
+            ]
+            device.write_ram(seq_data)
             ram_wr_ptr2 = device.get_ram_write_ptr()
             infostr = "Write position before: 0x%x\n" % ram_wr_ptr1
             infostr += "Write position after: 0x%x\n" % ram_wr_ptr2
@@ -46,9 +57,11 @@ class Controls(QtWidgets.QWidget):
         layout_bns.addWidget(bn_arm, 0, 0)
         layout_bns.addWidget(bn_start, 0, 1)
         layout_bns.addWidget(bn_stop, 0, 2)
-        layout_bns.addWidget(bn_reset, 0, 3)
-        layout_bns.addWidget(bn_upload, 1, 0, 1, 2)
-        layout_bns.addWidget(bn_resetclock, 1, 2, 1, 2)
+        layout_bns.addWidget(bn_hold, 0, 3)
+        layout_bns.addWidget(bn_upload, 1, 0)
+        layout_bns.addWidget(bn_clear, 1, 1)
+        layout_bns.addWidget(bn_resetclock, 1, 2)
+        layout_bns.addWidget(bn_reset, 1, 3)
 
 
 class Sliders(QtWidgets.QWidget):
@@ -109,12 +122,8 @@ class Config(QtWidgets.QWidget):
         cb_clk_ext = QtWidgets.QCheckBox()
         cb_clk_ext.setChecked(device.get_clock_extern())
         cb_clk_ext.toggled.connect(lambda enabled: device.set_clock_extern(enabled))
-        cb_auto_arm = QtWidgets.QCheckBox()
-        cb_auto_arm.setChecked(device.get_auto_arm())
-        cb_auto_arm.toggled.connect(lambda enabled: device.set_auto_arm(enabled))
 
         layout.addRow("Clock Ext", cb_clk_ext)
-        layout.addRow("Auto Arm", cb_auto_arm)
 
 
 class DeviceMeta(type):
@@ -172,7 +181,18 @@ class Main(QtWidgets.QWidget):
 
         # tab widget for each connected device
         self.device_tabs = QtWidgets.QTabWidget()
+        self.device_tabs.currentChanged.connect(self.onCurrentDeviceChanged)
         layout.addWidget(self.device_tabs)
+
+        # ipython console for scripting
+        kernel_manager = QtInProcessKernelManager()
+        kernel_manager.start_kernel()
+        kernel_client = kernel_manager.client()
+        kernel_client.start_channels()
+        self._console = IPythonWidget(font_size=9)
+        self._console.kernel_manager = kernel_manager
+        self._console.kernel_client = kernel_client
+        layout.addWidget(self._console)
 
         # add devices that are already present and handlers for hotplugging
         for serial in client.get_device_list():
@@ -180,33 +200,32 @@ class Main(QtWidgets.QWidget):
         client.addedDevice.connect(self.addDevice)
         client.removedDevice.connect(self.removeDevice)
 
-        # ipython console for scripting
-        kernel_manager = QtInProcessKernelManager()
-        kernel_manager.start_kernel()
-        kernel_client = kernel_manager.client()
-        kernel_client.start_channels()
+        # push client and device list to console namespace
         dct = {"client": client, "devices": self.devices}
         kernel_manager.kernel.shell.push(dct)
-        self._console = IPythonWidget(font_size=9, banner="Environment:\n%s\n\n" % dct)
-        self._console.kernel_manager = kernel_manager
-        self._console.kernel_client = kernel_client
-        layout.addWidget(self._console)
 
         self.resize(300, 600)
         self.setWindowTitle("FAout Test Application")
     
     def addDevice(self, serial):
         device = Device(self.client, serial)
+        self.devices.append(device)
         device_widget = DeviceWidget(device)
         self.device_tabs.addTab(device_widget, serial)
-        self.devices.append(device)
 
     def removeDevice(self, serial):
         for i in range(self.device_tabs.count()):
             if self.device_tabs.tabText(i) == serial:
-                self.device_tabs.removeTab(i)
                 del self.devices[i]
+                self.device_tabs.removeTab(i)
                 return
+
+    def onCurrentDeviceChanged(self, index):
+        if index >= 0:
+            dct = {"dev": self.devices[index]}
+        else:
+            dct = {"dev": None}
+        self._console.kernel_manager.kernel.shell.push(dct)
 
 
 if __name__ == "__main__":

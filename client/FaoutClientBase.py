@@ -76,17 +76,24 @@ class FaoutClientBase(object):
 
     # TODO: should these functions be common for all FAOUT devices?
 
-    def sequence_reset(self, serial):
+    def reset(self, serial):
         self.write_reg(serial, REG_CMD, 0x1 << 0)
 
     def sequence_start(self, serial):
         self.write_reg(serial, REG_CMD, 0x1 << 1)
 
+    def sequence_stop(self, serial):
+        self.write_reg(serial, REG_CMD, 0x1 << 2)
+
+    def sequence_hold(self, serial):
+        self.write_reg(serial, REG_CMD, 0x1 << 3)
+
     def sequence_arm(self, serial):
         self.write_reg(serial, REG_CMD, 0x1 << 4)
 
-    def sequence_stop(self, serial):
-        self.write_reg(serial, REG_CMD, 0x1 << 2)
+    def sequence_clear(self, serial):
+        self.write_reg(serial, REG_CMD, 0x1 << 6)
+
 
     def get_version(self, serial):
         return self.read_reg(serial, 1)
@@ -108,14 +115,8 @@ class FaoutClientBase(object):
 
     def set_clock_extern(self, serial, enabled):
         # TODO: check for clk_ext_valid, maybe try PLL reset
-        # self.write_reg(serial, 0, bool(extern) << 3)
+        # self.write_reg(serial, 0, bool(extern) << 5)
         return self.set_config_bit(serial, 0, enabled)
-
-    def get_auto_arm(self, serial):
-        return self.get_config_bit(serial, 1)
-
-    def set_auto_arm(self, serial, enabled):
-        return self.set_config_bit(serial, 1, enabled)
 
 
     # TODO: the following functions are device dependent
@@ -123,9 +124,10 @@ class FaoutClientBase(object):
     @staticmethod
     def __status_to_dict(status_val):
         return {
-            "status": status_val & 0xf,
-            "prepared": bool(status_val & 1<<4),
-            "running": bool(status_val & 1<<5),
+            "status": status_val & 0x7,
+            "running": bool(status_val & 1<<3),
+            "fifo_full": bool(status_val & 1<<4),
+            "fifo_empty": bool(status_val & 1<<5),
             "sdram_empty": bool(status_val & 1<<6),
             "sdram_full": bool(status_val & 1<<7),
             "seq_error": bool(status_val & 1<<8),
@@ -153,6 +155,19 @@ class FaoutClientBase(object):
         if dac_index < 0 or dac_index >= 6:
             raise ValueError("dac_index out of bounds")
         return self.read_reg(serial, 8+dac_index)
+
+    def write_interp(self, serial, index, value, steps):
+        if index < 0 or index >= 6:
+            raise ValueError("dac_index out of bounds")
+        self.write_reg(serial, 30+index, steps)
+        self.write_reg(serial, 24+index, value)
+
+    def read_interp(self, serial, index):
+        if index < 0 or index >= 6:
+            raise ValueError("dac_index out of bounds")
+        value = self.read_reg(serial, 24+index)
+        steps = self.read_reg(serial, 30+index)
+        return value, steps
 
 
 class SimpleFaoutClient(FaoutClientBase):
