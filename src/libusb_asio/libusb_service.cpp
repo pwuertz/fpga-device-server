@@ -55,7 +55,7 @@ private:
 				if (!ec) {
 					m_libusb_service.handleEvents();
 					if (m_libusb_service.isWatching(m_descriptor.native_handle()))
-						do_read();
+						do_write();
 				} else if (ec != boost::asio::error::operation_aborted) {
 					m_libusb_service.handleEvents();
 					if (m_libusb_service.isWatching(m_descriptor.native_handle())) {
