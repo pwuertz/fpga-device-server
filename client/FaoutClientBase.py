@@ -2,8 +2,18 @@
 import msgpack
 import socket
 
+ADDR_REGS = 0
 REG_CMD = 0
-REG_CONF = 2
+REG_STATUS = 1
+REG_CONFIG = 2
+REG_VERSION = 3
+
+ADDR_SDRAM = 1
+ADDR_DAC = 2
+ADDR_INTERP = 3
+ADDR_SEQ = 4
+
+SDRAM_MAX_ADDR = 2**23-1
 
 class FaoutClientBase(object):
     def __init__(self, send_data_cb, require_data_cb, events_pending_cb=None):
@@ -60,62 +70,93 @@ class FaoutClientBase(object):
         value = self.wait_for_answer()[1]
         return FaoutClientBase.__status_to_dict(value)
 
-    def read_reg(self, serial, reg):
-        self._send_object(["readreg", serial, reg])
+    def read_reg(self, serial, addr, port):
+        self._send_object(["readreg", serial, addr, port])
         return self.wait_for_answer()[1]
 
-    def write_reg(self, serial, reg, val):
-        self._send_object(["writereg", serial, reg, val])
+    def write_reg(self, serial, addr, port, val):
+        self._send_object(["writereg", serial, addr, port, val])
         self.wait_for_answer()
         return
 
-    def write_ram(self, serial, data):
-        self._send_object(["writeram", serial, data])
+    def write_reg_n(self, serial, addr, port, data):
+        self._send_object(["writeregn", serial, addr, port, data])
         self.wait_for_answer()
         return
+
+    def read_reg_n(self, serial, addr, port, n_words):
+        self._send_object(["readregn", serial, addr, port, n_words])
+        return self.wait_for_answer()[1]
 
     # TODO: should these functions be common for all FAOUT devices?
 
     def reset(self, serial):
-        self.write_reg(serial, REG_CMD, 0x1 << 0)
+        self.write_reg(serial, ADDR_REGS, REG_CMD, 0x1 << 0)
 
     def sequence_start(self, serial):
-        self.write_reg(serial, REG_CMD, 0x1 << 1)
+        self.write_reg(serial, ADDR_REGS, REG_CMD, 0x1 << 1)
 
     def sequence_stop(self, serial):
-        self.write_reg(serial, REG_CMD, 0x1 << 2)
+        self.write_reg(serial, ADDR_REGS, REG_CMD, 0x1 << 2)
 
     def sequence_hold(self, serial):
-        self.write_reg(serial, REG_CMD, 0x1 << 3)
+        self.write_reg(serial, ADDR_REGS, REG_CMD, 0x1 << 3)
 
     def sequence_arm(self, serial):
-        self.write_reg(serial, REG_CMD, 0x1 << 4)
+        self.write_reg(serial, ADDR_REGS, REG_CMD, 0x1 << 4)
 
-    def sequence_clear(self, serial):
-        self.write_reg(serial, REG_CMD, 0x1 << 6)
+
+    def sdram_rewind(self, serial):
+        self.write_reg(serial, ADDR_REGS, REG_CMD, 0x1 << 5)
+
+    def sdram_clear(self, serial):
+        self.write_reg(serial, ADDR_REGS, REG_CMD, 0x1 << 6)
+
+    def sdram_rd_wr_ptr(self, serial):
+        rd_lw = self.read_reg(serial, ADDR_SDRAM, 0)
+        rd_hw = self.read_reg(serial, ADDR_SDRAM, 1)
+        rd_ptr = (rd_hw << 16) | rd_lw
+        wr_lw = self.read_reg(serial, ADDR_SDRAM, 2)
+        wr_hw = self.read_reg(serial, ADDR_SDRAM, 3)
+        wr_ptr = (wr_hw << 16) | wr_lw
+        return rd_ptr, wr_ptr
+
+    def sdram_write(self, serial, data):
+        rd_ptr, wr_ptr = self.sdram_rd_wr_ptr(serial)
+        n_free = SDRAM_MAX_ADDR - wr_ptr
+        if len(data) > n_free:
+            raise ValueError("too much data for sdram")
+        self.write_reg_n(serial, ADDR_SDRAM, 4, data)
+
+    def sdram_read(self, serial, n_words=None):
+        rd_ptr, wr_ptr = self.sdram_rd_wr_ptr(serial)
+        n_available = wr_ptr - rd_ptr
+        if n_words is None:
+            n_words = n_available
+        if n_words > n_available:
+            raise ValueError("not enough data in sdram")
+        return self.read_reg_n(serial, ADDR_SDRAM, 4, n_words)
 
 
     def get_version(self, serial):
-        return self.read_reg(serial, 1)
+        return self.read_reg(serial, ADDR_REGS, REG_VERSION)
 
     def get_config_bit(self, serial, bit):
-        conf_reg = self.read_reg(serial, REG_CONF)
+        conf_reg = self.read_reg(serial, ADDR_REGS, REG_CONFIG)
         return bool(conf_reg & (1 << bit))
 
     def set_config_bit(self, serial, bit, enabled):
-        conf_reg = self.read_reg(serial, REG_CONF)
+        conf_reg = self.read_reg(serial, ADDR_REGS, REG_CONFIG)
         if enabled:
             conf_reg |= (1 << bit)
         else:
             conf_reg &= ~(1 << bit)
-        self.write_reg(serial, REG_CONF, conf_reg)
+        self.write_reg(serial, ADDR_REGS, REG_CONFIG, conf_reg)
 
     def get_clock_extern(self, serial):
         return self.get_config_bit(serial, 0)
 
     def set_clock_extern(self, serial, enabled):
-        # TODO: check for clk_ext_valid, maybe try PLL reset
-        # self.write_reg(serial, 0, bool(extern) << 5)
         return self.set_config_bit(serial, 0, enabled)
 
 
@@ -136,37 +177,27 @@ class FaoutClientBase(object):
             "clk_ext_selected": bool(status_val & 1<<11),
         }
 
-    def get_ram_read_ptr(self, serial):
-        rd_lw = self.read_reg(serial, 16)
-        rd_hw = self.read_reg(serial, 17)
-        return (rd_hw << 16) | rd_lw
-
-    def get_ram_write_ptr(self, serial):
-        wr_lw = self.read_reg(serial, 18)
-        wr_hw = self.read_reg(serial, 19)
-        return (wr_hw << 16) | wr_lw
-
     def write_dac(self, serial, dac_index, value):
         if dac_index < 0 or dac_index >= 6:
             raise ValueError("dac_index out of bounds")
-        self.write_reg(serial, 8+dac_index, value)
+        self.write_reg(serial, ADDR_DAC, dac_index, value)
 
     def read_dac(self, serial, dac_index):
         if dac_index < 0 or dac_index >= 6:
             raise ValueError("dac_index out of bounds")
-        return self.read_reg(serial, 8+dac_index)
+        return self.read_reg(serial, ADDR_DAC, dac_index)
 
     def write_interp(self, serial, index, value, steps):
         if index < 0 or index >= 6:
             raise ValueError("dac_index out of bounds")
-        self.write_reg(serial, 30+index, steps)
-        self.write_reg(serial, 24+index, value)
+        self.write_reg(serial, ADDR_INTERP, index+6, steps)
+        self.write_reg(serial, ADDR_INTERP, index, value)
 
     def read_interp(self, serial, index):
         if index < 0 or index >= 6:
             raise ValueError("dac_index out of bounds")
-        value = self.read_reg(serial, 24+index)
-        steps = self.read_reg(serial, 30+index)
+        steps = self.read_reg(serial, ADDR_INTERP, index+6)
+        value = self.read_reg(serial, ADDR_INTERP, index)
         return value, steps
 
 

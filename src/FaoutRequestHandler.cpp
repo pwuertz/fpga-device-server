@@ -37,9 +37,10 @@ FaoutRequestHandler::FaoutRequestHandler(FaoutManager& manager) :
 	m_functions["writereg"] = [&](msgpack_args_t& args, msgpack_reply_t& reply) {
 		auto device = m_manager.getDevice(args.at(1).as<std::string>());
 		if (device) {
-			uint8_t reg = args.at(2).as<uint8_t>();
-			uint16_t value = args.at(3).as<uint16_t>();
-			device->writeReg(reg, value);
+			uint8_t addr = args.at(2).as<uint8_t>();
+			uint8_t port = args.at(3).as<uint8_t>();
+			uint16_t value = args.at(4).as<uint16_t>();
+			device->writeReg(addr, port, value);
 			RPC_REPLY_VALUE(reply, 0);
 		} else {
 			RPC_REPLY_ERROR(reply, "Unknown device");
@@ -49,22 +50,39 @@ FaoutRequestHandler::FaoutRequestHandler(FaoutManager& manager) :
 	m_functions["readreg"] = [&](msgpack_args_t& args, msgpack_reply_t& reply) {
 		auto device = m_manager.getDevice(args.at(1).as<std::string>());
 		if (device) {
-			uint8_t reg = args.at(2).as<uint8_t>();
+			uint8_t addr = args.at(2).as<uint8_t>();
+			uint8_t port = args.at(3).as<uint8_t>();
 			uint16_t value;
-			device->readReg(reg, &value);
+			device->readReg(addr, port, &value);
 			RPC_REPLY_VALUE(reply, value);
 		} else {
 			RPC_REPLY_ERROR(reply, "Unknown device");
 		}
 	};
 
-	m_functions["writeram"] = [&](msgpack_args_t& args, msgpack_reply_t& reply) {
+	m_functions["writeregn"] = [&](msgpack_args_t& args, msgpack_reply_t& reply) {
 		auto device = m_manager.getDevice(args.at(1).as<std::string>());
 		if (device) {
+			uint8_t addr = args.at(2).as<uint8_t>();
+			uint8_t port = args.at(3).as<uint8_t>();
 			std::vector<uint16_t> sequence;
-			args.at(2).convert(&sequence);
-			device->writeRam(sequence.data(), sequence.size());
+			args.at(4).convert(&sequence);
+			device->writeRegN(addr, port, sequence.data(), sequence.size());
 			RPC_REPLY_VALUE(reply, 0);
+		} else {
+			RPC_REPLY_ERROR(reply, "Unknown device");
+		}
+	};
+
+	m_functions["readregn"] = [&](msgpack_args_t& args, msgpack_reply_t& reply) {
+		auto device = m_manager.getDevice(args.at(1).as<std::string>());
+		if (device) {
+			uint8_t addr = args.at(2).as<uint8_t>();
+			uint8_t port = args.at(3).as<uint8_t>();
+			uint32_t n_words = args.at(4).as<uint32_t>();
+			std::vector<uint16_t> sequence(n_words);
+			device->readRegN(addr, port, sequence.data(), n_words);
+			RPC_REPLY_VALUE(reply, sequence);
 		} else {
 			RPC_REPLY_ERROR(reply, "Unknown device");
 		}

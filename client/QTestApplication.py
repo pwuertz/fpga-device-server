@@ -25,13 +25,11 @@ class Controls(QtWidgets.QWidget):
         bn_hold.clicked.connect(lambda: device.sequence_hold())
         bn_reset = QtWidgets.QPushButton("Reset")
         bn_reset.clicked.connect(lambda: device.reset())
-        bn_resetclock = QtWidgets.QPushButton("Reset ClkExt")
-        bn_resetclock.clicked.connect(lambda: device.write_reg(0, 0x1 << 5))
         bn_clear = QtWidgets.QPushButton("Clear")
-        bn_clear.clicked.connect(lambda: device.sequence_clear())
+        bn_clear.clicked.connect(lambda: device.sdram_clear())
         bn_upload = QtWidgets.QPushButton("Upload")
         def upload():
-            ram_wr_ptr1 = device.get_ram_write_ptr()
+            _, ram_wr_ptr1 = device.sdram_rd_wr_ptr()
             #data = np.load("testsequence.npy")
             #seq_data = data.tolist()
             seq_data = [
@@ -41,8 +39,8 @@ class Controls(QtWidgets.QWidget):
                 1<<4 | 1<<6, 13, 14,   # write regs 4 and 6
                 1<<15, 0               # write end
             ]
-            device.write_ram(seq_data)
-            ram_wr_ptr2 = device.get_ram_write_ptr()
+            device.sdram_write(seq_data)
+            _, ram_wr_ptr2 = device.sdram_rd_wr_ptr()
             infostr = "Write position before: 0x%x\n" % ram_wr_ptr1
             infostr += "Write position after: 0x%x\n" % ram_wr_ptr2
             QtWidgets.QMessageBox.information(self, "DRAM Info", infostr)
@@ -60,8 +58,7 @@ class Controls(QtWidgets.QWidget):
         layout_bns.addWidget(bn_hold, 0, 3)
         layout_bns.addWidget(bn_upload, 1, 0)
         layout_bns.addWidget(bn_clear, 1, 1)
-        layout_bns.addWidget(bn_resetclock, 1, 2)
-        layout_bns.addWidget(bn_reset, 1, 3)
+        layout_bns.addWidget(bn_reset, 1, 2)
 
 
 class Sliders(QtWidgets.QWidget):

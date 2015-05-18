@@ -16,9 +16,10 @@ public:
 	bool updateStatus();
 	uint16_t lastStatus();
 
-	void writeReg(uint8_t addr, uint16_t value);
-	void readReg(uint8_t addr, uint16_t* value);
-	void writeRam(const uint16_t* data, size_t n);
+	void writeReg(uint8_t addr, uint8_t port, uint16_t value);
+	void readReg(uint8_t addr, uint8_t port, uint16_t* value);
+	void writeRegN(uint8_t addr, uint8_t port, const uint16_t* data, size_t n);
+	void readRegN(uint8_t addr, uint8_t port, uint16_t* data, size_t n);
 
 private:
 	const std::string m_name;
