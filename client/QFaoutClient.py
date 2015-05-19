@@ -1,13 +1,14 @@
-from FaoutClientBase import FaoutClientBase
+from FaoutClientBase import FaoutClientBase, ADDR_REGS, REG_STATUS
 from PyQt5 import QtCore, QtNetwork
 
 
 class QFaoutClient(QtCore.QObject, FaoutClientBase):
     DEFAULT_TIMEOUT = 5
 
-    addedDevice = QtCore.pyqtSignal(str)
-    removedDevice = QtCore.pyqtSignal(str)
-    statusUpdate = QtCore.pyqtSignal(str, object)
+    deviceAdded = QtCore.pyqtSignal(str)
+    deviceRemoved = QtCore.pyqtSignal(str)
+    statusChanged = QtCore.pyqtSignal(str, object)
+    registerChanged = QtCore.pyqtSignal(str, int, int, int)
     __eventsPending = QtCore.pyqtSignal()
 
     def __init__(self, host, port=9001):
@@ -34,12 +35,17 @@ class QFaoutClient(QtCore.QObject, FaoutClientBase):
         while self._events:
             event = self._events.pop(0)
             try:
-                if event[0] == 1:
-                    self.addedDevice.emit(event[1])
-                elif event[0] == 2:
-                    self.removedDevice.emit(event[1])
-                elif event[0] == 3:
-                    self.statusUpdate.emit(event[1], event[2])
+                if event[0] == FaoutClientBase.RPC_RCODE_ADDED:
+                    self.deviceAdded.emit(event[1])
+                elif event[0] == FaoutClientBase.RPC_RCODE_REMOVED:
+                    self.deviceRemoved.emit(event[1])
+                elif event[0] == FaoutClientBase.RPC_RCODE_REG_CHANGED:
+                    serial, addr, port, value = event[1:5]
+                    if addr == ADDR_REGS and port == REG_STATUS:
+                        status = self._status_to_dict(value)
+                        self.statusChanged.emit(serial, status)
+                    else:
+                        self.registerChanged.emit(serial, addr, port, value)
             except Exception as e:
                 print("error handling pending events: %s" % e)
 
@@ -64,7 +70,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Faout-Client Example')
     parser.add_argument('host', nargs='?', default='localhost')
-    parser.add_argument('port', nargs='?', type=int, default=9001)
+    parser.add_argument('port', nargs='?', type=int, default=9002)
     args = parser.parse_args()
 
     from PyQt5 import QtCore
@@ -84,12 +90,6 @@ if __name__ == "__main__":
     value = client.get_version(device)
     print("Device version: %d" % value)
 
-    value = client.read_dac(device, 0)
-    print("Read analog output 1: 0x%x" % value)
-    
-    client.write_dac(device, 0, value+1)
-    print("Write analog output 1: 0x%x" % (value+1))
-
     # setup signal handlers for asynchronous events
     def added(dev):
         print("Added: %s" % dev)
@@ -97,9 +97,12 @@ if __name__ == "__main__":
         print("Removed: %s" % dev)
     def status(dev, stat):
         print("Status %s: %s" % (dev, stat))
-    client.addedDevice.connect(added)
-    client.removedDevice.connect(removed)
-    client.statusUpdate.connect(status)
+    def regchanged(dev, addr, port, value):
+        print("Register (%s, %d, %d): %d" % (dev, addr, port, value))
+    client.deviceAdded.connect(added)
+    client.deviceRemoved.connect(removed)
+    client.statusChanged.connect(status)
+    client.registerChanged.connect(regchanged)
 
     # stop Qt event loop on CTRL+C
     import signal

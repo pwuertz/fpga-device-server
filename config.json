@@ -1,0 +1,21 @@
+{
+    "DeviceDescriptions": [
+        {
+            "name": "FAOUT",
+            "prefix": "FAOUT",
+            "bitfile": false,
+            "watchlist": [
+                [0, 1]
+            ]
+        },
+        {
+            "name": "Digitizer",
+            "prefix": "DIGIT",
+            "bitfile": "digitizer_firmware.bit",
+            "watchlist": []
+        }
+    ],
+    "Server": {
+        "port": 9002
+    }
+}

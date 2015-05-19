@@ -3,44 +3,51 @@
 #include <execinfo.h>
 
 #include "libusb_asio/libusb_service.h"
-#include "devices/FaoutManager.h"
-#include "FaoutRequestHandler.h"
 #include "network/Server.h"
+#include "config/Config.h"
+#include "devices/DeviceManager.h"
+#include "DeviceRequestHandler.h"
 
 
 int main() {
 #ifdef VERSION_STR
-	std::cout << "faout-server, " << VERSION_STR << std::endl;
+	std::cout << "Starting device-server, " << VERSION_STR << std::endl << std::endl;
+#else
+	std::cout << "Starting device-server" << std::endl;
 #endif
 
 	try {
+		// read configuration file
+		Config config = Config::fromFile("config.json");
+
+		// asio main loop
 		boost::asio::io_service io_service;
 
 		// add usb service
 		boost::asio::libusb_service libusb_service(io_service);
-		FaoutManager faout_manager(io_service, libusb_service);
-		FaoutRequestHandler rpc_handler(faout_manager);
+		DeviceManager device_manager(io_service, libusb_service, config.device_descriptions);
+		DeviceRequestHandler rpc_handler(device_manager);
 
 		// add network service
-		Server server(9001, io_service, rpc_handler);
+		Server server(config.port, io_service, rpc_handler);
 
 		// add handlers for FaoutManager events
-		faout_manager.setAddedCallback([&](const std::string& serial){
+		device_manager.setAddedCallback([&](const std::string& serial){
 			auto buffer_out = std::make_shared<msgpack::sbuffer>();
 			msgpack::packer<msgpack::sbuffer> packer_out(buffer_out.get());
 			RPC_EVENT_ADDED(packer_out, serial);
 			server.sendAll(buffer_out);
 		});
-		faout_manager.setRemovedCallback([&](const std::string& serial){
+		device_manager.setRemovedCallback([&](const std::string& serial){
 			auto buffer_out = std::make_shared<msgpack::sbuffer>();
 			msgpack::packer<msgpack::sbuffer> packer_out(buffer_out.get());
 			RPC_EVENT_REMOVED(packer_out, serial);
 			server.sendAll(buffer_out);
 		});
-		faout_manager.setStatusCallback([&](const std::string& serial, uint16_t status) {
+		device_manager.setRegChangedCallback([&](const std::string& serial, uint8_t addr, uint8_t port, uint16_t value) {
 			auto buffer_out = std::make_shared<msgpack::sbuffer>();
 			msgpack::packer<msgpack::sbuffer> packer_out(buffer_out.get());
-			RPC_EVENT_STATUS(packer_out, serial, status);
+			RPC_EVENT_REG_CHANGED(packer_out, serial, addr, port, value);
 			server.sendAll(buffer_out);
 		});
 
@@ -53,7 +60,7 @@ int main() {
 			[&](boost::system::error_code, int)
 			{
 				std::cout << "Shutting down" << std::endl;
-				faout_manager.stop();
+				device_manager.stop();
 				server.stop();
 				libusb_service.stop();
 			}

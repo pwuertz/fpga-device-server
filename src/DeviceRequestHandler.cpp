@@ -1,4 +1,4 @@
-#include "FaoutRequestHandler.h"
+#include "DeviceRequestHandler.h"
 
 template <int I=0, typename T>
 void msgpack_parse(std::vector<msgpack::object>& args, T& value)
@@ -13,7 +13,7 @@ void msgpack_parse(std::vector<msgpack::object>& args, U& head, T&... tail)
     msgpack_parse<I+1>(args, tail...);
 }
 
-FaoutRequestHandler::FaoutRequestHandler(FaoutManager& manager) :
+DeviceRequestHandler::DeviceRequestHandler(DeviceManager& manager) :
 		RequestHandler(),
 		m_manager(manager)
 {
@@ -25,6 +25,7 @@ FaoutRequestHandler::FaoutRequestHandler(FaoutManager& manager) :
 		RPC_REPLY_VALUE(reply, devicelist);
 	};
 
+	/*
 	m_functions["status"] = [&](msgpack_args_t& args, msgpack_reply_t& reply) {
 		auto device = m_manager.getDevice(args.at(1).as<std::string>());
 		if (device) {
@@ -33,6 +34,7 @@ FaoutRequestHandler::FaoutRequestHandler(FaoutManager& manager) :
 			RPC_REPLY_ERROR(reply, "Unknown device");
 		}
 	};
+	*/
 
 	m_functions["writereg"] = [&](msgpack_args_t& args, msgpack_reply_t& reply) {
 		auto device = m_manager.getDevice(args.at(1).as<std::string>());
@@ -93,7 +95,7 @@ FaoutRequestHandler::FaoutRequestHandler(FaoutManager& manager) :
 	};
 }
 
-void FaoutRequestHandler::handleRequest(msgpack::object& request,
+void DeviceRequestHandler::handleRequest(msgpack::object& request,
 		msgpack::packer<msgpack::sbuffer>& reply)
 {
 	// basic protocol: request is an array of objects

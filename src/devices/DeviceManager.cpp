@@ -1,5 +1,4 @@
-#include "FaoutManager.h"
-
+#include "DeviceManager.h"
 #include <boost/algorithm/string.hpp>
 #include <chrono>
 
@@ -45,15 +44,17 @@ void getUsbDeviceStrings(libusb_device* dev,
 }
 
 
-FaoutManager::FaoutManager(boost::asio::io_service& io_service,
-		boost::asio::libusb_service& usb_service) :
+DeviceManager::DeviceManager(boost::asio::io_service& io_service,
+		boost::asio::libusb_service& usb_service,
+		device_descriptions_t device_descriptions) :
 	m_timer(io_service),
 	m_libusb_service(usb_service),
 	m_device_map(),
+	m_device_descriptions(std::move(device_descriptions)),
 	m_serial_map(),
 	m_device_added_cb(),
 	m_device_removed_cb(),
-	m_device_status_cb()
+	m_device_reg_change_cb()
 {
 	// handler for added or removed faout (ftdi) devices
 	int faout_vid = 0x0403;
@@ -66,24 +67,39 @@ FaoutManager::FaoutManager(boost::asio::io_service& io_service,
 					// get strings from usb device
 					std::string manufacturer, product, serial;
 					getUsbDeviceStrings(dev, manufacturer, product, serial);
-
-					// is the ftdi device a faout device?
 					std::cout << "New device: " << product << ", " << manufacturer << std::endl;
-					if (!boost::algorithm::starts_with(serial, "FAOUT")) {
-						std::cout << "Not identified as Faout device - Serial=" << serial << std::endl;
-						return;
-					}
+
 					// make sure the serial is unique
 					if (hasSerial(serial)) {
 						std::cerr << "Not adding device with duplicate Serial=" << serial << std::endl;
 						return;
 					}
-					// add new device to manager
-					std::cout << "Adding device: Faout, Serial=" << serial << std::endl;
-					auto faout = std::make_shared<FaoutDevice>(dev, serial);
-					m_device_map.insert(std::make_pair(dev, faout->shared_from_this()));
-					m_serial_map.insert(std::make_pair(faout->name(), faout->shared_from_this()));
-					if (m_device_added_cb) m_device_added_cb(faout->name());
+
+					// search device description based on serial
+					bool device_added = false;
+					for (auto& desc: m_device_descriptions) {
+						if (boost::algorithm::starts_with(serial, desc.serial_prefix)) {
+
+							// add new device to manager
+							std::cout << "Adding " << desc.name << ", Serial=" << serial << std::endl;
+							auto device = std::make_shared<Device>(dev, serial);
+							m_device_map.insert(std::make_pair(dev, device->shared_from_this()));
+							m_serial_map.insert(std::make_pair(device->name(), device->shared_from_this()));
+
+							// emit added callback
+							if (m_device_added_cb) m_device_added_cb(device->name());  // TODO: post callback to asio loop?
+
+							// setup register tracking information and set callback
+							for (auto& addr_port: desc.watchlist)
+								device->trackReg(addr_port.first, addr_port.second);
+							device->setRegChangedCallback(m_device_reg_change_cb);  // TODO: post callback to asio loop?
+
+							device_added = true;
+							break;
+						}
+					}
+					if (!device_added)
+						std::cout << "Not adding device with Serial=" << serial << std::endl;
 
 				} catch (const std::exception& e) {
 					std::cerr << "Adding device failed: " << e.what() << std::endl;
@@ -101,49 +117,48 @@ FaoutManager::FaoutManager(boost::asio::io_service& io_service,
 	});
 
 	// start periodic status updates of registered devices
-	_periodicStatusUpdates();
+	_periodicRegisterUpdates();
 }
 
-FaoutManager::~FaoutManager() {
+DeviceManager::~DeviceManager() {
 	stop();
 }
 
-void FaoutManager::_periodicStatusUpdates() {
-	// get status updates for all devices and emit callbacks
+void DeviceManager::_periodicRegisterUpdates() {
+	// poll tracked registers for all devices and emit callbacks
 	for (auto p: m_serial_map) {
 		try {
 			auto device = p.second;
-			if (device->updateStatus() && m_device_status_cb)
-				m_device_status_cb(p.first, device->lastStatus());
+			device->updateTrackedRegs();
 		} catch (std::exception& e) {
-			std::cerr << "Error updating status of " << p.first;
+			std::cerr << "Error polling registers of " << p.first;
 			std::cerr << ", " << e.what() << std::endl;
 		}
 	}
 	// schedule next update
-	m_timer.expires_from_now(std::chrono::milliseconds(FAOUT_MANAGER_UPDATE_DELAY_MS));
+	m_timer.expires_from_now(std::chrono::milliseconds(DEVICE_MANAGER_UPDATE_DELAY_MS));
 	m_timer.async_wait([this](const boost::system::error_code& ec) {
 		if (!ec) {
-			_periodicStatusUpdates();
+			_periodicRegisterUpdates();
 		}
 	});
 }
 
-void FaoutManager::stop() {
+void DeviceManager::stop() {
 	m_timer.cancel();
 }
 
-bool FaoutManager::hasDevice(libusb_device* dev) {
+bool DeviceManager::hasDevice(libusb_device* dev) {
 	return m_device_map.find(dev) != m_device_map.end();
 }
 
-void FaoutManager::getDeviceList(std::list<std::string>& list) {
+void DeviceManager::getDeviceList(std::list<std::string>& list) {
 	for (auto elem: m_serial_map) {
 		list.push_back(elem.first);
 	}
 }
 
-ptrFaoutDevice_t FaoutManager::getDevice(const std::string& serial) {
+ptrDevice_t DeviceManager::getDevice(const std::string& serial) {
 	if (hasSerial(serial)) {
 		return m_serial_map[serial]->shared_from_this();
 	} else {
@@ -151,18 +166,18 @@ ptrFaoutDevice_t FaoutManager::getDevice(const std::string& serial) {
 	}
 }
 
-bool FaoutManager::hasSerial(const std::string& serial) {
+bool DeviceManager::hasSerial(const std::string& serial) {
 	return m_serial_map.find(serial) != m_serial_map.end();
 }
 
-void FaoutManager::setAddedCallback(fn_device_added_cb cb) {
+void DeviceManager::setAddedCallback(fn_device_added_cb cb) {
 	m_device_added_cb = std::move(cb);
 }
 
-void FaoutManager::setRemovedCallback(fn_device_removed_cb cb) {
+void DeviceManager::setRemovedCallback(fn_device_removed_cb cb) {
 	m_device_removed_cb = std::move(cb);
 }
 
-void FaoutManager::setStatusCallback(fn_device_status_cb cb) {
-	m_device_status_cb = std::move(cb);
+void DeviceManager::setRegChangedCallback(fn_device_reg_changed_cb cb) {
+	m_device_reg_change_cb = std::move(cb);
 }

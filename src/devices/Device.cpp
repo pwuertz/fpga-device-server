@@ -1,8 +1,8 @@
 #include <chrono>
 #include <thread>
 
-#include "FaoutDevice.h"
 #include "../libftdi/ftdi.h"
+#include "Device.h"
 
 #define CMD_READREG 1
 #define CMD_WRITEREG 2
@@ -10,10 +10,10 @@
 #define CMD_WRITEREG_N 4
 
 
-FaoutDevice::FaoutDevice(libusb_device* dev, std::string name) :
+Device::Device(libusb_device* dev, std::string name) :
 		m_name(std::move(name)),
 		m_ftdi(nullptr),
-		m_last_status(0xffff)
+		m_tracked_regs()
 {
 	// open FTDI interface A
 	ftdi_context* ftdi_a;
@@ -75,7 +75,7 @@ FaoutDevice::FaoutDevice(libusb_device* dev, std::string name) :
 	m_ftdi = ftdi_a;
 }
 
-FaoutDevice::~FaoutDevice() {
+Device::~Device() {
 	if (m_ftdi) {
 		ftdi_set_bitmode(m_ftdi, 0xfb, BITMODE_RESET);
 		ftdi_usb_close(m_ftdi);
@@ -83,7 +83,7 @@ FaoutDevice::~FaoutDevice() {
 	}
 }
 
-void FaoutDevice::writeReg(uint8_t addr, uint8_t port, uint16_t value) {
+void Device::writeReg(uint8_t addr, uint8_t port, uint16_t value) {
 	// send register write command
 	uint16_t wr_cmd[] = {
 			htobe16((CMD_WRITEREG << 12) | ((addr & 0x3f) << 6) | (port & 0x3f)),
@@ -122,7 +122,7 @@ void ftdi_read_data_wait(struct ftdi_context *ftdi, unsigned char *buf, int size
 	}
 }
 
-void FaoutDevice::readReg(uint8_t addr, uint8_t port, uint16_t* value) {
+void Device::readReg(uint8_t addr, uint8_t port, uint16_t* value) {
 	// send register read command
 	uint16_t rd_cmd[] = {
 			htobe16((CMD_READREG << 12) | ((addr & 0x3f) << 6) | (port & 0x3f))
@@ -133,12 +133,20 @@ void FaoutDevice::readReg(uint8_t addr, uint8_t port, uint16_t* value) {
 	}
 
 	// read result
-	uint16_t result;
-	ftdi_read_data_wait(m_ftdi, (unsigned char*) &result, sizeof(uint16_t));
-	*value = be16toh(result);
+	uint16_t value_be;
+	ftdi_read_data_wait(m_ftdi, (unsigned char*) &value_be, sizeof(uint16_t));
+	*value = be16toh(value_be);
+
+	// store result if tracked and invoke callback
+	auto it = m_tracked_regs.find(addr_port_t(addr, port));
+	if (it != m_tracked_regs.end()) {
+		uint16_t value_old = it->second;
+		it->second = *value;
+		if (*value != value_old && m_device_reg_change_cb) m_device_reg_change_cb(m_name, addr, port, *value);
+	}
 }
 
-void FaoutDevice::writeRegN(uint8_t addr, uint8_t port, const uint16_t* data_be, size_t n) {
+void Device::writeRegN(uint8_t addr, uint8_t port, const uint16_t* data_be, size_t n) {
 	// send N words to register
 
 	// packet length encoded as 16bit unsigned, send data in chunks of n_packet_max
@@ -169,7 +177,7 @@ void FaoutDevice::writeRegN(uint8_t addr, uint8_t port, const uint16_t* data_be,
 	}
 }
 
-void FaoutDevice::readRegN(uint8_t addr, uint8_t port, uint16_t* data_be, size_t n) {
+void Device::readRegN(uint8_t addr, uint8_t port, uint16_t* data_be, size_t n) {
 	// read N words from register
 
 	// packet length encoded as 16bit unsigned, read data in chunks of n_packet_max
@@ -197,16 +205,51 @@ void FaoutDevice::readRegN(uint8_t addr, uint8_t port, uint16_t* data_be, size_t
 	}
 }
 
-bool FaoutDevice::updateStatus() {
-	uint16_t old_status = m_last_status;
-	readReg(0, 1, &m_last_status);
-	return m_last_status != old_status;
+void Device::trackReg(uint8_t addr, uint8_t port, bool enabled) {
+	addr_port_t addr_port(addr, port);
+	if (enabled) {
+		m_tracked_regs.insert(std::make_pair(addr_port, (uint16_t) 0));
+	} else {
+		m_tracked_regs.erase(addr_port);
+	}
 }
 
-uint16_t FaoutDevice::lastStatus() {
-	return m_last_status;
+void Device::updateTrackedRegs() {
+	// send multiple register read commands
+	uint16_t rd_cmd[m_tracked_regs.size()];
+	{
+		int i = 0;
+		for (auto& kv: m_tracked_regs) {
+			uint8_t addr(kv.first.first);
+			uint8_t port(kv.first.second);
+			rd_cmd[i++] = htobe16((CMD_READREG << 12) | ((addr & 0x3f) << 6) | (port & 0x3f));
+		}
+	}
+	int n = ftdi_write_data(m_ftdi, (unsigned char*) rd_cmd, sizeof(rd_cmd));
+	if (n != int(sizeof(rd_cmd))) {
+		throw std::runtime_error("FTDI write error");
+	}
+
+	// read results
+	uint16_t values_be[m_tracked_regs.size()];
+	ftdi_read_data_wait(m_ftdi, (unsigned char*) &values_be, sizeof(values_be));
+
+	// store results and invoke callback
+	int i = 0;
+	for (auto& kv: m_tracked_regs) {
+		uint8_t addr(kv.first.first);
+		uint8_t port(kv.first.second);
+		uint16_t value_old = kv.second;
+		uint16_t value = be16toh(values_be[i++]);
+		kv.second = value;
+		if (value != value_old && m_device_reg_change_cb) m_device_reg_change_cb(m_name, addr, port, value);
+	}
 }
 
-const std::string& FaoutDevice::name() const {
+void Device::setRegChangedCallback(fn_device_reg_changed_cb cb) {
+	m_device_reg_change_cb = std::move(cb);
+}
+
+const std::string& Device::name() const {
 	return m_name;
 }

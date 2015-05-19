@@ -17,6 +17,12 @@ ADDR_SEQ = 4
 SDRAM_MAX_ADDR = 2**23-1
 
 class FaoutClientBase(object):
+    RPC_RCODE_ERROR = -1
+    RPC_RCODE_OK = 0
+    RPC_RCODE_ADDED = 1
+    RPC_RCODE_REMOVED = 2
+    RPC_RCODE_REG_CHANGED = 3    
+    
     def __init__(self, send_data_cb, require_data_cb, events_pending_cb=None):
         self.__send_data_cb = send_data_cb
         self.__require_data_cb = require_data_cb
@@ -41,17 +47,12 @@ class FaoutClientBase(object):
             if rcode <= 0:
                 self._answers.append(packet)
             else:
-                if rcode == 3:
-                    try:
-                        packet[2] = FaoutClientBase.__status_to_dict(packet[2])
-                    except:
-                        raise ValueError("error processing status event packet")
                 self._events.append(packet)
 
         if self._events and self.__events_pending_cb:
             self.__events_pending_cb()
 
-    def wait_for_answer(self):
+    def _wait_for_answer(self):
         if not self._answers and not self.__require_data_cb:
             raise RuntimeError("cannot wait for data without require_data_cb")
         while not self._answers:
@@ -64,34 +65,33 @@ class FaoutClientBase(object):
 
     def get_device_list(self):
         self._send_object(["devicelist"])
-        return self.wait_for_answer()[1]
-
-    def get_device_status(self, serial):
-        self._send_object(["status", serial])
-        value = self.wait_for_answer()[1]
-        return FaoutClientBase.__status_to_dict(value)
+        return self._wait_for_answer()[1]
 
     def read_reg(self, serial, addr, port):
         self._send_object(["readreg", serial, addr, port])
-        return self.wait_for_answer()[1]
+        return self._wait_for_answer()[1]
 
     def write_reg(self, serial, addr, port, val):
         self._send_object(["writereg", serial, addr, port, val])
-        self.wait_for_answer()
+        self._wait_for_answer()
         return
 
     def write_reg_n(self, serial, addr, port, data):
         data_raw_be = bytes(np.asarray(data, dtype=">u2").data)
         self._send_object(["writeregn", serial, addr, port, data_raw_be])
-        self.wait_for_answer()
+        self._wait_for_answer()
         return
 
     def read_reg_n(self, serial, addr, port, n_words):
         self._send_object(["readregn", serial, addr, port, n_words])
-        data_raw_be = self.wait_for_answer()[1]
+        data_raw_be = self._wait_for_answer()[1]
         return np.frombuffer(data_raw_be, dtype=">u2", count=n_words)
 
     # TODO: should these functions be common for all FAOUT devices?
+
+    def get_device_status(self, serial):
+        value = self.read_reg(serial, ADDR_REGS, REG_STATUS)
+        return FaoutClientBase._status_to_dict(value)
 
     def reset(self, serial):
         self.write_reg(serial, ADDR_REGS, REG_CMD, 0x1 << 0)
@@ -166,7 +166,7 @@ class FaoutClientBase(object):
     # TODO: the following functions are device dependent
 
     @staticmethod
-    def __status_to_dict(status_val):
+    def _status_to_dict(status_val):
         return {
             "status": status_val & 0x7,
             "running": bool(status_val & 1<<3),
@@ -246,7 +246,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Faout-Client Example')
     parser.add_argument('host', nargs='?', default='localhost')
-    parser.add_argument('port', nargs='?', type=int, default=9001)
+    parser.add_argument('port', nargs='?', type=int, default=9002)
     args = parser.parse_args()
 
     client = SimpleFaoutClient(args.host, args.port)
@@ -262,12 +262,6 @@ if __name__ == "__main__":
 
     value = client.get_version(device)
     print("Device version: %d" % value)
-
-    value = client.read_dac(device, 0)
-    print("Read analog output 1: 0x%x" % value)
-    
-    client.write_dac(device, 0, value+1)
-    print("Write analog output 1: 0x%x" % (value+1))
 
     print("")
     print("Waiting for events")

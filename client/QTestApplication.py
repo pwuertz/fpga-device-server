@@ -102,7 +102,7 @@ class Status(QtWidgets.QWidget):
         layout.addRow("Firmware", QtWidgets.QLabel(str(device.get_version())))
 
         self.device = device
-        device.client.statusUpdate.connect(self.handleStatus)
+        device.client.statusChanged.connect(self.handleStatus)
 
     def handleStatus(self, serial, status_dict):
         if self.device.serial == serial:
@@ -194,8 +194,8 @@ class Main(QtWidgets.QWidget):
         # add devices that are already present and handlers for hotplugging
         for serial in client.get_device_list():
             self.addDevice(serial)
-        client.addedDevice.connect(self.addDevice)
-        client.removedDevice.connect(self.removeDevice)
+        client.deviceAdded.connect(self.addDevice)
+        client.deviceRemoved.connect(self.removeDevice)
 
         # push client and device list to console namespace
         dct = {"client": client, "devices": self.devices}
@@ -229,7 +229,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='FAout Test Application')
     parser.add_argument('host', nargs='?', default='localhost')
-    parser.add_argument('port', nargs='?', type=int, default=9001)
+    parser.add_argument('port', nargs='?', type=int, default=9002)
 
     args = parser.parse_args()
     app = QtWidgets.QApplication([])
