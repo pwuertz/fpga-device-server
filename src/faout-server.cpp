@@ -9,6 +9,10 @@
 
 
 int main() {
+#ifdef VERSION_STR
+	std::cout << "faout-server, " << VERSION_STR << std::endl;
+#endif
+
 	try {
 		boost::asio::io_service io_service;
 
