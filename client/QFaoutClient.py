@@ -27,7 +27,7 @@ class QFaoutClient(QtCore.QObject, FaoutClientBase):
 
     def _handle_ready_read(self):
         if self.__socket.bytesAvailable():
-            data = self.__socket.read(8*1024)
+            data = self.__socket.read(self.__socket.bytesAvailable())
             self._parse_bytes(data)
     
     def _handle_events_pending(self):
@@ -47,7 +47,7 @@ class QFaoutClient(QtCore.QObject, FaoutClientBase):
         ready = self.__socket.waitForReadyRead(QFaoutClient.DEFAULT_TIMEOUT * 1000)
         if not ready:
             raise RuntimeError("no response from server")
-        data = self.__socket.read(8*1024)
+        data = self.__socket.read(self.__socket.bytesAvailable())
         self._parse_bytes(data)
 
     def _handle_send_data(self, data):
