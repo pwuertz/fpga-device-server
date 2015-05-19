@@ -18,6 +18,13 @@
 	PACKER << VAL; \
 }
 
+#define RPC_REPLY_BINARY(PACKER, PTR, N) { \
+	PACKER.pack_array(2); \
+	PACKER.pack_int8(RPC_RCODE_OK); \
+	PACKER.pack_raw(N); \
+	PACKER.pack_raw_body(PTR, N); \
+}
+
 #define RPC_REPLY_ERROR(PACKER, STR) { \
 	PACKER.pack_array(2); \
 	PACKER.pack_int8(RPC_RCODE_ERROR); \

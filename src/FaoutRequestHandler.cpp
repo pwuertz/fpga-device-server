@@ -65,9 +65,13 @@ FaoutRequestHandler::FaoutRequestHandler(FaoutManager& manager) :
 		if (device) {
 			uint8_t addr = args.at(2).as<uint8_t>();
 			uint8_t port = args.at(3).as<uint8_t>();
-			std::vector<uint16_t> sequence;
-			args.at(4).convert(&sequence);
-			device->writeRegN(addr, port, sequence.data(), sequence.size());
+			// get argument 4 as uint16_t (be) buffer
+			if (args.at(4).type != msgpack::type::RAW)
+				RPC_REPLY_ERROR(reply, "Invalid argument");
+			uint16_t* data_be = (uint16_t*) args.at(4).via.raw.ptr;
+			size_t n_words = args.at(4).via.raw.size / sizeof(uint16_t);
+
+			device->writeRegN(addr, port, data_be, n_words);
 			RPC_REPLY_VALUE(reply, 0);
 		} else {
 			RPC_REPLY_ERROR(reply, "Unknown device");
@@ -80,9 +84,9 @@ FaoutRequestHandler::FaoutRequestHandler(FaoutManager& manager) :
 			uint8_t addr = args.at(2).as<uint8_t>();
 			uint8_t port = args.at(3).as<uint8_t>();
 			uint32_t n_words = args.at(4).as<uint32_t>();
-			std::vector<uint16_t> sequence(n_words);
-			device->readRegN(addr, port, sequence.data(), n_words);
-			RPC_REPLY_VALUE(reply, sequence);
+			std::vector<uint16_t> data_be(n_words);
+			device->readRegN(addr, port, data_be.data(), n_words);
+			RPC_REPLY_BINARY(reply, (char*) data_be.data(), n_words*sizeof(uint16_t));
 		} else {
 			RPC_REPLY_ERROR(reply, "Unknown device");
 		}

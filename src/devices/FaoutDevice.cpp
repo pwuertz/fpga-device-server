@@ -138,7 +138,7 @@ void FaoutDevice::readReg(uint8_t addr, uint8_t port, uint16_t* value) {
 	*value = be16toh(result);
 }
 
-void FaoutDevice::writeRegN(uint8_t addr, uint8_t port, const uint16_t* data, size_t n) {
+void FaoutDevice::writeRegN(uint8_t addr, uint8_t port, const uint16_t* data_be, size_t n) {
 	// send N words to register
 
 	// packet length encoded as 16bit unsigned, send data in chunks of n_packet_max
@@ -153,7 +153,7 @@ void FaoutDevice::writeRegN(uint8_t addr, uint8_t port, const uint16_t* data, si
 		out_buffer[1] = htobe16(n_packet);
 		// copy data to output buffer
 		for (size_t i = 0; i < n_packet; ++i) {
-			out_buffer[2+i] = htobe16(data[n_sent+i]);
+			out_buffer[2+i] = data_be[n_sent+i];
 		}
 
 		size_t packet_bytes = sizeof(uint16_t) * (2 + n_packet);
@@ -169,7 +169,7 @@ void FaoutDevice::writeRegN(uint8_t addr, uint8_t port, const uint16_t* data, si
 	}
 }
 
-void FaoutDevice::readRegN(uint8_t addr, uint8_t port, uint16_t* data, size_t n) {
+void FaoutDevice::readRegN(uint8_t addr, uint8_t port, uint16_t* data_be, size_t n) {
 	// read N words from register
 
 	// packet length encoded as 16bit unsigned, read data in chunks of n_packet_max
@@ -192,13 +192,8 @@ void FaoutDevice::readRegN(uint8_t addr, uint8_t port, uint16_t* data, size_t n)
 
 		// read data
 		size_t sz_packet = sizeof(uint16_t) * n_packet;
-		ftdi_read_data_wait(m_ftdi, (unsigned char*) (data + n_read), sz_packet);
+		ftdi_read_data_wait(m_ftdi, (unsigned char*) (data_be + n_read), sz_packet);
 		n_read += n_packet;
-	}
-
-	// convert from big endian
-	for (size_t i = 0; i < n; ++i) {
-		data[i] = be16toh(data[i]);
 	}
 }
 

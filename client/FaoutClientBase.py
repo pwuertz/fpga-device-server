@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import msgpack
+import numpy as np
 import socket
 
 ADDR_REGS = 0
@@ -80,13 +81,15 @@ class FaoutClientBase(object):
         return
 
     def write_reg_n(self, serial, addr, port, data):
-        self._send_object(["writeregn", serial, addr, port, data])
+        data_raw_be = bytes(np.asarray(data, dtype=">u2").data)
+        self._send_object(["writeregn", serial, addr, port, data_raw_be])
         self.wait_for_answer()
         return
 
     def read_reg_n(self, serial, addr, port, n_words):
         self._send_object(["readregn", serial, addr, port, n_words])
-        return self.wait_for_answer()[1]
+        data_raw_be = self.wait_for_answer()[1]
+        return np.frombuffer(data_raw_be, dtype=">u2", count=n_words)
 
     # TODO: should these functions be common for all FAOUT devices?
 
