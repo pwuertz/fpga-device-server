@@ -1,4 +1,5 @@
 #include "Server.h"
+#include <iostream>
 
 using boost::asio::ip::tcp;
 

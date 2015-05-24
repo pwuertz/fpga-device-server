@@ -2,6 +2,8 @@
 #define LIBUSB_HANDLER_H_
 
 #include <iostream>
+#include <functional>
+#include <memory>
 #include <boost/asio.hpp>
 #include <libusb.h>
 

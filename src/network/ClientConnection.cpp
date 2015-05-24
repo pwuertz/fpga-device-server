@@ -7,6 +7,7 @@
 
 #include "ClientConnection.h"
 #include "ConnectionManager.h"
+#include <iostream>
 
 using boost::asio::ip::tcp;
 

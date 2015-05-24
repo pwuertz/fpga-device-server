@@ -1,4 +1,5 @@
 #include "DeviceManager.h"
+#include "DeviceProgrammer.h"
 #include <boost/algorithm/string.hpp>
 #include <chrono>
 
@@ -67,11 +68,11 @@ DeviceManager::DeviceManager(boost::asio::io_service& io_service,
 					// get strings from usb device
 					std::string manufacturer, product, serial;
 					getUsbDeviceStrings(dev, manufacturer, product, serial);
-					std::cout << "New device: " << product << ", " << manufacturer << std::endl;
+					std::cout << "New device: " << product << ", " << manufacturer << ", " << serial << std::endl;
 
 					// make sure the serial is unique
 					if (hasSerial(serial)) {
-						std::cerr << "Not adding device with duplicate Serial=" << serial << std::endl;
+						std::cerr << "Not adding device with duplicate serial=" << serial << std::endl;
 						return;
 					}
 
@@ -79,9 +80,19 @@ DeviceManager::DeviceManager(boost::asio::io_service& io_service,
 					bool device_added = false;
 					for (auto& desc: m_device_descriptions) {
 						if (boost::algorithm::starts_with(serial, desc.serial_prefix)) {
+							// description found
+							std::cout << "Adding " << serial << ": " << desc.name << std::endl;
+
+							// program the device if bitfile is defined
+							{
+								if (!desc.fname_bitfile.empty()) {
+									std::cout << "Programming " << serial << ": " << desc.fname_bitfile << std::endl;
+									DeviceProgrammer programmer(dev);
+									programmer.program(desc.fname_bitfile);
+								}
+							}
 
 							// add new device to manager
-							std::cout << "Adding " << desc.name << ", Serial=" << serial << std::endl;
 							auto device = std::make_shared<Device>(dev, serial);
 							m_device_map.insert(std::make_pair(dev, device->shared_from_this()));
 							m_serial_map.insert(std::make_pair(device->name(), device->shared_from_this()));
@@ -99,7 +110,7 @@ DeviceManager::DeviceManager(boost::asio::io_service& io_service,
 						}
 					}
 					if (!device_added)
-						std::cout << "Not adding device with Serial=" << serial << std::endl;
+						std::cout << "Ignoring device (serial=" << serial << ")" << std::endl;
 
 				} catch (const std::exception& e) {
 					std::cerr << "Adding device failed: " << e.what() << std::endl;
@@ -108,7 +119,7 @@ DeviceManager::DeviceManager(boost::asio::io_service& io_service,
 		} else {
 			if (hasDevice(dev)) {
 				const std::string& serial = m_device_map[dev]->name();
-				std::cout << "Removed device: Faout, Serial=" << serial << std::endl;
+				std::cout << "Removed device: serial=" << serial << std::endl;
 				if (m_device_added_cb) m_device_removed_cb(serial);
 				m_serial_map.erase(serial);
 				m_device_map.erase(dev);

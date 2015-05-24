@@ -1,7 +1,7 @@
 #include <chrono>
 #include <thread>
 
-#include "../libftdi/ftdi.h"
+#include "libftdi/ftdi.h"
 #include "Device.h"
 
 #define CMD_READREG 1

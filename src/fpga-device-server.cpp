@@ -45,18 +45,18 @@ int main() {
 			server.sendAll(buffer_out);
 		});
 		device_manager.setRegChangedCallback([&](const std::string& serial, uint8_t addr, uint8_t port, uint16_t value) {
-			auto buffer_out = std::make_shared<msgpack::sbuffer>();
+            auto buffer_out = std::make_shared<msgpack::sbuffer>();
 			msgpack::packer<msgpack::sbuffer> packer_out(buffer_out.get());
 			RPC_EVENT_REG_CHANGED(packer_out, serial, addr, port, value);
 			server.sendAll(buffer_out);
 		});
 
 		// add system signal handler
-		boost::asio::signal_set signals(io_service);
-		signals.add(SIGINT);
-		signals.add(SIGTERM);
-		signals.add(SIGQUIT);
-		signals.async_wait(
+        boost::asio::signal_set signals(io_service);
+        signals.add(SIGINT);
+        signals.add(SIGTERM);
+        signals.add(SIGQUIT);
+        signals.async_wait(
 			[&](boost::system::error_code, int)
 			{
 				std::cout << "Shutting down" << std::endl;
