@@ -555,14 +555,12 @@ unsigned int IOFtdi::readusb(unsigned char * rbuf, unsigned long len)
             if (last_errno)
             {
                 fprintf(stderr,"error %s\n", strerror(last_errno));
-                deinit();
                 throw std::runtime_error(strerror(last_errno));
             }
         }
         if (last_read <0)
         {
             fprintf(stderr,"Error %d str: %s\n", -last_read, strerror(-last_read));
-            deinit();
             throw std::runtime_error(strerror(-last_read));
         }
     }
@@ -580,22 +578,28 @@ unsigned int IOFtdi::readusb(unsigned char * rbuf, unsigned long len)
 
 void IOFtdi::deinit(void)
 {
-  int read;
-  /* Before shutdown, we must wait until everything is shifted out
-     Do this by temporary enabling loopback mode, write something 
-     and wait until we can read it back */
-  static unsigned char   tbuf[16] = { SET_BITS_LOW, 0xff, 0x00,
-                                      SET_BITS_HIGH, 0xff, 0x00,
-                                      LOOPBACK_START,
-				      MPSSE_DO_READ|MPSSE_READ_NEG|
-				      MPSSE_DO_WRITE|MPSSE_WRITE_NEG|MPSSE_LSB, 
-				      0x04, 0x00,
-				      0xaa, 0x55, 0x00, 0xff, 0xaa, 
-				      LOOPBACK_END};
-  mpsse_add_cmd(tbuf, 16);
-  read = readusb( tbuf,5);
-  if  (read != 5) 
-      fprintf(stderr,"Loopback failed, expect problems on later runs\n");
+	try {
+		int read;
+		/* Before shutdown, we must wait until everything is shifted out
+		 * Do this by temporary enabling loopback mode, write something
+		 * and wait until we can read it back */
+		static unsigned char tbuf[16] = {
+				SET_BITS_LOW, 0xff, 0x00,
+				SET_BITS_HIGH, 0xff, 0x00,
+				LOOPBACK_START,
+				MPSSE_DO_READ | MPSSE_READ_NEG |
+				MPSSE_DO_WRITE | MPSSE_WRITE_NEG | MPSSE_LSB,
+				0x04, 0x00,
+				0xaa, 0x55, 0x00, 0xff, 0xaa,
+				LOOPBACK_END
+		};
+		mpsse_add_cmd(tbuf, 16);
+		read = readusb(tbuf,5);
+		if  (read != 5)
+			fprintf(stderr,"Loopback failed, expect problems on later runs\n");
+	} catch (...) {
+		fprintf(stderr,"Loopback failed, expect problems on later runs\n");
+	}
  
 #ifdef USE_FTD2XX 
   if (ftd2xx_handle)
@@ -603,10 +607,10 @@ void IOFtdi::deinit(void)
   else
 #endif
   {
-      ftdi_set_bitmode(ftdi_handle, 0, BITMODE_RESET);
+	  ftdi_set_bitmode(ftdi_handle, 0, BITMODE_RESET);
       ftdi_usb_reset(ftdi_handle);
       ftdi_usb_close(ftdi_handle);
-      ftdi_deinit(ftdi_handle);
+      ftdi_free(ftdi_handle);
   }
   if(verbose)
     fprintf(stderr, "USB transactions: Write %d read %d retries %d\n",
@@ -616,7 +620,6 @@ void IOFtdi::deinit(void)
 IOFtdi::~IOFtdi()
 {
   deinit();
-  free(ftdi_handle);
   if(fp_dbg)
     fclose(fp_dbg);
 }
