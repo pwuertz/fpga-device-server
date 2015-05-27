@@ -12,6 +12,7 @@
 
 Device::Device(libusb_device* dev, std::string name) :
 		m_name(std::move(name)),
+		m_dev(dev),
 		m_ftdi(nullptr),
 		m_tracked_regs()
 {
@@ -252,4 +253,8 @@ void Device::setRegChangedCallback(fn_device_reg_changed_cb cb) {
 
 const std::string& Device::name() const {
 	return m_name;
+}
+
+libusb_device* Device::libusbDevice() {
+	return m_dev;
 }

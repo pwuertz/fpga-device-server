@@ -53,6 +53,7 @@ private:
 	fn_device_removed_cb m_device_removed_cb;
 	fn_device_reg_changed_cb m_device_reg_change_cb;
 
+	void _removeDevice(const std::string& serial);
 	void _periodicRegisterUpdates();
 };
 

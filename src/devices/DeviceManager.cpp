@@ -119,10 +119,7 @@ DeviceManager::DeviceManager(boost::asio::io_service& io_service,
 		} else {
 			if (hasDevice(dev)) {
 				const std::string& serial = m_device_map[dev]->name();
-				std::cout << "Removed device: serial=" << serial << std::endl;
-				if (m_device_added_cb) m_device_removed_cb(serial);
-				m_serial_map.erase(serial);
-				m_device_map.erase(dev);
+				_removeDevice(serial);
 			}
 		}
 	});
@@ -135,6 +132,20 @@ DeviceManager::~DeviceManager() {
 	stop();
 }
 
+void DeviceManager::_removeDevice(const std::string& serial) {
+	if (hasSerial(serial)) {
+		std::cout << "Removed device: serial=" << serial << std::endl;
+		try {
+			if (m_device_added_cb) m_device_removed_cb(serial);
+		} catch (const std::exception& e) {
+			std::cerr << "Exception in device remove callback: " << e.what() << std::endl;
+		}
+		libusb_device* dev = m_serial_map[serial]->libusbDevice();
+		m_serial_map.erase(serial);
+		m_device_map.erase(dev);
+	}
+}
+
 void DeviceManager::_periodicRegisterUpdates() {
 	// poll tracked registers for all devices and emit callbacks
 	for (auto p: m_serial_map) {
@@ -144,6 +155,7 @@ void DeviceManager::_periodicRegisterUpdates() {
 		} catch (std::exception& e) {
 			std::cerr << "Error polling registers of " << p.first;
 			std::cerr << ", " << e.what() << std::endl;
+			_removeDevice(p.second->name());
 		}
 	}
 	// schedule next update

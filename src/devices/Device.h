@@ -16,6 +16,7 @@ public:
 	Device(libusb_device* dev, std::string name);
 	virtual ~Device();
 	const std::string& name() const;
+	libusb_device* libusbDevice();
 
 	void writeReg(uint8_t addr, uint8_t port, uint16_t value);
 	void readReg(uint8_t addr, uint8_t port, uint16_t* value);
@@ -28,6 +29,7 @@ public:
 
 private:
 	const std::string m_name;
+	libusb_device* m_dev;
 	ftdi_context* m_ftdi;
 	std::map<addr_port_t, uint16_t> m_tracked_regs;
 	fn_device_reg_changed_cb m_device_reg_change_cb;
