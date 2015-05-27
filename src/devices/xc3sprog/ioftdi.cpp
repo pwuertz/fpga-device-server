@@ -556,14 +556,14 @@ unsigned int IOFtdi::readusb(unsigned char * rbuf, unsigned long len)
             {
                 fprintf(stderr,"error %s\n", strerror(last_errno));
                 deinit();
-                throw std::exception();
+                throw std::runtime_error(strerror(last_errno));
             }
         }
         if (last_read <0)
         {
             fprintf(stderr,"Error %d str: %s\n", -last_read, strerror(-last_read));
             deinit();
-            throw std::exception();
+            throw std::runtime_error(strerror(-last_read));
         }
     }
   if(fp_dbg)
@@ -691,7 +691,7 @@ void IOFtdi::mpsse_send() {
       {
           fprintf(stderr,"mpsse_send: Short write %d vs %d at run %d, Err: %s\n", 
                   written, bptr, calls_wr, ftdi_get_error_string(ftdi_handle));
-          throw std::exception();
+          throw std::runtime_error(ftdi_get_error_string(ftdi_handle));
       }
   }
 
