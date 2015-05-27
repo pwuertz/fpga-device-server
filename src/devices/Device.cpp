@@ -148,6 +148,7 @@ void Device::readReg(uint8_t addr, uint8_t port, uint16_t* value) {
 }
 
 void Device::writeRegN(uint8_t addr, uint8_t port, const uint16_t* data_be, size_t n) {
+	if (n == 0) return;
 	// send N words to register
 
 	// packet length encoded as 16bit unsigned, send data in chunks of n_packet_max
@@ -179,6 +180,7 @@ void Device::writeRegN(uint8_t addr, uint8_t port, const uint16_t* data_be, size
 }
 
 void Device::readRegN(uint8_t addr, uint8_t port, uint16_t* data_be, size_t n) {
+	if (n == 0) return;
 	// read N words from register
 
 	// packet length encoded as 16bit unsigned, read data in chunks of n_packet_max
