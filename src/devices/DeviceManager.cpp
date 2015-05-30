@@ -4,6 +4,14 @@
 #include <chrono>
 
 
+DeviceManager::device_descriptions_t::const_iterator find_description(const std::string& serial, const DeviceManager::device_descriptions_t& descriptions) {
+	for (auto it = descriptions.cbegin(); it != descriptions.cend(); ++it)
+		if (boost::algorithm::starts_with(serial, it->serial_prefix))
+			return it;
+	return descriptions.cend();
+}
+
+
 class LibUsbDevice {
 public:
 	LibUsbDevice(libusb_device* dev) : m_dev_handle(nullptr) {
@@ -57,64 +65,56 @@ DeviceManager::DeviceManager(boost::asio::io_service& io_service,
 	m_device_removed_cb(),
 	m_device_reg_change_cb()
 {
-	// handler for added or removed faout (ftdi) devices
+	// handler for added or removed FTDI devices
 	int faout_vid = 0x0403;
 	int faout_pid = 0x6010;
 	m_libusb_service.addHotplugHandler(faout_vid, faout_pid, LIBUSB_HOTPLUG_MATCH_ANY,
 			[this](libusb_context* ctx, libusb_device* dev, libusb_hotplug_event ev) {
 		if (ev == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
-			if (!hasDevice(dev)) {
-				try {
-					// get strings from usb device
-					std::string manufacturer, product, serial;
-					getUsbDeviceStrings(dev, manufacturer, product, serial);
-					std::cout << "New device: " << product << ", " << manufacturer << ", " << serial << std::endl;
+			// filter out spurious events just in case
+			if (hasDevice(dev))
+				return;
 
-					// make sure the serial is unique
-					if (hasSerial(serial)) {
-						std::cerr << "Not adding device with duplicate serial=" << serial << std::endl;
-						return;
-					}
+			try {
+				// get strings from usb device
+				std::string manufacturer, product, serial;
+				getUsbDeviceStrings(dev, manufacturer, product, serial);
+				std::cout << "New device: " << product << ", " << manufacturer << ", " << serial << std::endl;
 
-					// search device description based on serial
-					bool device_added = false;
-					for (auto& desc: m_device_descriptions) {
-						if (boost::algorithm::starts_with(serial, desc.serial_prefix)) {
-							// description found
-							std::cout << "Adding " << serial << ": " << desc.name << std::endl;
-
-							// program the device if bitfile is defined
-							{
-								if (!desc.fname_bitfile.empty()) {
-									std::cout << "Programming " << serial << ": " << desc.fname_bitfile << std::endl;
-									DeviceProgrammer programmer(dev);
-									programmer.program(desc.fname_bitfile);
-								}
-							}
-
-							// add new device to manager
-							auto device = std::make_shared<Device>(dev, serial);
-							m_device_map.insert(std::make_pair(dev, device->shared_from_this()));
-							m_serial_map.insert(std::make_pair(device->name(), device->shared_from_this()));
-
-							// emit added callback
-							if (m_device_added_cb) m_device_added_cb(device->name());  // TODO: post callback to asio loop?
-
-							// setup register tracking information and set callback
-							for (auto& addr_port: desc.watchlist)
-								device->trackReg(addr_port.first, addr_port.second);
-							device->setRegChangedCallback(m_device_reg_change_cb);  // TODO: post callback to asio loop?
-
-							device_added = true;
-							break;
-						}
-					}
-					if (!device_added)
-						std::cout << "Ignoring device (serial=" << serial << ")" << std::endl;
-
-				} catch (const std::exception& e) {
-					std::cerr << "Adding device failed: " << e.what() << std::endl;
+				// make sure the serial is unique
+				if (hasSerial(serial)) {
+					std::cerr << "Not adding device with duplicate serial=" << serial << std::endl;
+					return;
 				}
+
+				// search device description based on serial
+				auto desc = find_description(serial, m_device_descriptions);
+				if (desc == m_device_descriptions.cend()) {
+					std::cout << "Ignoring device (serial=" << serial << ")" << std::endl;
+					return;
+				}
+
+				// create new device, this initialization process may also bring back stalled devices
+				std::cout << "Adding " << serial << ": " << desc->name << std::endl;
+				auto device = std::make_shared<Device>(dev, serial);
+
+				// program the device if bitfile is defined
+				reprogramDevice(device);
+
+				// add new device to manager
+				m_device_map.insert(std::make_pair(dev, device->shared_from_this()));
+				m_serial_map.insert(std::make_pair(device->name(), device->shared_from_this()));
+
+				// emit added callback
+				if (m_device_added_cb) m_device_added_cb(device->name());  // TODO: post callback to asio loop?
+
+				// setup register tracking information and set callback
+				for (auto& addr_port: desc->watchlist)
+					device->trackReg(addr_port.first, addr_port.second);
+				device->setRegChangedCallback(m_device_reg_change_cb);  // TODO: post callback to asio loop?
+
+			} catch (const std::exception& e) {
+				std::cerr << "Adding device failed: " << e.what() << std::endl;
 			}
 		} else {
 			if (hasDevice(dev)) {
@@ -165,6 +165,35 @@ void DeviceManager::_periodicRegisterUpdates() {
 			_periodicRegisterUpdates();
 		}
 	});
+}
+
+bool DeviceManager::reprogramDevice(const std::string& serial) {
+	return reprogramDevice(getDevice(serial));
+}
+
+bool DeviceManager::reprogramDevice(ptrDevice_t device) {
+	// check for device, description, and bitfile definition
+	if (!device)
+		return false;
+	auto desc = find_description(device->name(), m_device_descriptions);
+	if (desc == m_device_descriptions.cend())
+		return false;
+	if (desc->fname_bitfile.empty())
+		return false;
+	std::cout << "Programming " << device->name() << ": " << desc->fname_bitfile << std::endl;
+
+	// release the usb device and reprogram before claiming it again
+	libusb_device* dev = device->libusbDevice();
+	device->close();
+	try {
+		DeviceProgrammer programmer(dev);
+		programmer.program(desc->fname_bitfile);
+	} catch (...) {
+		device->open();
+		throw;
+	}
+	device->open();
+	return true;
 }
 
 void DeviceManager::stop() {

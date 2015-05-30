@@ -16,13 +16,27 @@ Device::Device(libusb_device* dev, std::string name) :
 		m_ftdi(nullptr),
 		m_tracked_regs()
 {
+	open();
+}
+
+Device::~Device() {
+	close();
+}
+
+bool Device::isOpen() {
+	return bool(m_ftdi);
+}
+
+void Device::open() {
+	if (isOpen()) return;
+
 	// open FTDI interface A
 	ftdi_context* ftdi_a;
 	if ((ftdi_a = ftdi_new()) == nullptr) {
 		throw std::runtime_error("ftdi_new failed");
 	};
 	ftdi_set_interface(ftdi_a, INTERFACE_A);
-	if (ftdi_usb_open_dev(ftdi_a, dev) != 0) {
+	if (ftdi_usb_open_dev(ftdi_a, m_dev) != 0) {
 		const char* errorstr = ftdi_get_error_string(ftdi_a);
 		ftdi_free(ftdi_a);
 		throw std::runtime_error(errorstr);
@@ -34,7 +48,7 @@ Device::Device(libusb_device* dev, std::string name) :
 		throw std::runtime_error("ftdi_new failed");
 	};
 	ftdi_set_interface(ftdi_b, INTERFACE_B);
-	if (ftdi_usb_open_dev(ftdi_b, dev) != 0) {
+	if (ftdi_usb_open_dev(ftdi_b, m_dev) != 0) {
 		const char* errorstr = ftdi_get_error_string(ftdi_b);
 		ftdi_free(ftdi_b);
 		throw std::runtime_error(errorstr);
@@ -76,11 +90,12 @@ Device::Device(libusb_device* dev, std::string name) :
 	m_ftdi = ftdi_a;
 }
 
-Device::~Device() {
+void Device::close() {
 	if (m_ftdi) {
 		ftdi_set_bitmode(m_ftdi, 0xfb, BITMODE_RESET);
 		ftdi_usb_close(m_ftdi);
 		ftdi_free(m_ftdi);
+		m_ftdi = nullptr;
 	}
 }
 

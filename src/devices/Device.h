@@ -16,6 +16,10 @@ public:
 	Device(libusb_device* dev, std::string name);
 	virtual ~Device();
 	const std::string& name() const;
+	void open();
+	void close();
+	bool isOpen();
+
 	libusb_device* libusbDevice();
 
 	void writeReg(uint8_t addr, uint8_t port, uint16_t value);

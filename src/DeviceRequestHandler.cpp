@@ -25,16 +25,14 @@ DeviceRequestHandler::DeviceRequestHandler(DeviceManager& manager) :
 		RPC_REPLY_VALUE(reply, devicelist);
 	};
 
-	/*
-	m_functions["status"] = [&](msgpack_args_t& args, msgpack_reply_t& reply) {
+	m_functions["reprogram"] = [&](msgpack_args_t& args, msgpack_reply_t& reply) {
 		auto device = m_manager.getDevice(args.at(1).as<std::string>());
 		if (device) {
-			RPC_REPLY_VALUE(reply, device->lastStatus());
+			RPC_REPLY_VALUE(reply, m_manager.reprogramDevice(device));
 		} else {
 			RPC_REPLY_ERROR(reply, "Unknown device");
 		}
 	};
-	*/
 
 	m_functions["writereg"] = [&](msgpack_args_t& args, msgpack_reply_t& reply) {
 		auto device = m_manager.getDevice(args.at(1).as<std::string>());

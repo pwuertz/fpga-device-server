@@ -35,6 +35,8 @@ public:
 
 	void getDeviceList(std::list<std::string>& list);
 	ptrDevice_t getDevice(const std::string& serial);
+	bool reprogramDevice(const std::string& serial);
+	bool reprogramDevice(ptrDevice_t device);
 
 	bool hasDevice(libusb_device*);
 	bool hasSerial(const std::string& serial);
