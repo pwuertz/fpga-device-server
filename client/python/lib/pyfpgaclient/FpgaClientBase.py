@@ -18,15 +18,15 @@ class FpgaDevice(object):
         self._client = client
         self._serial = serial
 
+    def _reg_changed(self, addr, port, value):
+        # implement method for handling register changes
+        pass
+
     def __str__(self):
         return self._serial
 
     def __repr__(self):
         return "<%s: %s>" % (type(self).__name__, self._serial)
-
-    def _handle_reg_changed(self, addr, port, value):
-        # override this method for handling register changes in your framework
-        pass
 
     def reprogram_device(self):
         return self._client.reprogram_device(self._serial)
@@ -54,21 +54,29 @@ class FpgaClientBase(object):
     DEVICE_MIXIN_MAP = _DEFAULT_DEVICE_MIXIN_MAP
     DEVICE_BASE_CLASS = FpgaDevice
 
-    def __init__(self, send_data_cb, require_data_cb,
-                 device_added_cb=None, device_removed_cb=None):
-        self.__send_data_cb = send_data_cb
-        self.__require_data_cb = require_data_cb
-        self.__device_added_cb = device_added_cb
-        self.__device_removed_cb = device_removed_cb
+    def __init__(self):
         self.__unpacker = msgpack.Unpacker()
         self._answers = []
         self._devices = {}
 
-    def _send_object(self, obj):
-        data = msgpack.packb(obj)
-        self.__send_data_cb(data)
+    def _write_data(self):
+        # implement method for handling data to be written
+        raise NotImplementedError()
 
-    def _parse_bytes(self, data):
+    def _require_data(self):
+        # implement method for handling requests for more data
+        raise NotImplementedError()
+
+    def _device_added(self, serial, device):
+        # implement method for handling added devices
+        pass
+
+    def _device_removed(self, serial):
+        # implement method for handling removed devices
+        pass
+
+    def _parse_data(self, data):
+        # use method for handling incoming data
         self.__unpacker.feed(data)
         for packet in self.__unpacker:
             packet = list(packet)
@@ -80,28 +88,29 @@ class FpgaClientBase(object):
             if rcode <= 0:
                 self._answers.append(packet)
             elif rcode == FpgaClientBase.RPC_RCODE_ADDED:
-                self._handle_added(serial=packet[1])
+                self.__handle_added(serial=packet[1])
             elif rcode == FpgaClientBase.RPC_RCODE_REMOVED:
-                self._handle_removed(serial=packet[1])
+                self.__handle_removed(serial=packet[1])
             elif rcode == FpgaClientBase.RPC_RCODE_REG_CHANGED:
                 serial, addr, port, value = packet[1:5]
-                self._handle_reg_changed(serial, addr, port, value)
+                self.__handle_reg_changed(serial, addr, port, value)
             else:
                 warnings.warn("unknown packet type (rcode=%d)" % rcode)
-                self._events.append(packet)
 
     def _wait_for_answer(self):
-        if not self._answers and not self.__require_data_cb:
-            raise RuntimeError("cannot wait for data without require_data_cb")
         while not self._answers:
-            self.__require_data_cb()
+            self._require_data()
         packet = self._answers.pop(0)
         if packet[0] != 0:
             raise RuntimeError("returned error: %s" % packet)
         else:
             return packet
 
-    def _handle_added(self, serial):
+    def __send_object(self, obj):
+        data = msgpack.packb(obj)
+        self._write_data(data)
+
+    def __handle_added(self, serial):
         if serial in self._devices:
             return
 
@@ -115,66 +124,64 @@ class FpgaClientBase(object):
             # no mixin found, create plain device
             self._devices[serial] = self.DEVICE_BASE_CLASS(client=self, serial=serial)
 
-        if self.__device_added_cb:
-            self.__device_added_cb(serial, self._devices[serial])
+        self._device_added(serial, self._devices[serial])
 
-    def _handle_removed(self, serial):
+    def __handle_removed(self, serial):
         if serial not in self._devices:
             return
 
         del self._devices[serial]
-        if self.__device_removed_cb:
-            self.__device_removed_cb(serial)
+        self._device_removed(serial)
 
-    def _handle_reg_changed(self, serial, addr, port, value):
+    def __handle_reg_changed(self, serial, addr, port, value):
         # get device object for serial
         try:
-            dev = self._devices[serial]
+            device = self._devices[serial]
         except:
             return  # silently ignore events for unknown devices, TODO: warn/log/report?
-        dev._handle_reg_changed(addr, port, value)
+        device._reg_changed(addr, port, value)
 
-    def _handle_device_list_changes(self, device_list):
+    def __handle_device_list_changes(self, device_list):
         # check for devices that were not added yet
         for serial in device_list:
             if serial not in self._devices:
-                self._handle_added(serial)
+                self.__handle_added(serial)
         # check for devices that haven't been removed yet
         for serial in self._devices.iterkeys():
             if serial not in device_list:
-                self._handle_removed(serial)
+                self.__handle_removed(serial)
 
     def get_device_list(self):
         # refresh device list and get internal device list in sync
-        self._send_object(["devicelist"])
+        self.__send_object(["devicelist"])
         device_list = self._wait_for_answer()[1]
-        self._handle_device_list_changes(device_list)
+        self.__handle_device_list_changes(device_list)
         return device_list
 
     def get_device(self, serial):
         return self._devices[serial]
 
     def reprogram_device(self, serial):
-        self._send_object(["reprogram", serial])
+        self.__send_object(["reprogram", serial])
         return self._wait_for_answer()[1]
 
     def read_reg(self, serial, addr, port):
-        self._send_object(["readreg", serial, addr, port])
+        self.__send_object(["readreg", serial, addr, port])
         return self._wait_for_answer()[1]
 
     def write_reg(self, serial, addr, port, val):
-        self._send_object(["writereg", serial, addr, port, val])
+        self.__send_object(["writereg", serial, addr, port, val])
         self._wait_for_answer()
         return
 
     def write_reg_n(self, serial, addr, port, data):
         data_raw_be = bytes(np.asarray(data, dtype=">u2").data)
-        self._send_object(["writeregn", serial, addr, port, data_raw_be])
+        self.__send_object(["writeregn", serial, addr, port, data_raw_be])
         self._wait_for_answer()
         return
 
     def read_reg_n(self, serial, addr, port, n_words):
-        self._send_object(["readregn", serial, addr, port, n_words])
+        self.__send_object(["readregn", serial, addr, port, n_words])
         data_raw_be = self._wait_for_answer()[1]
         return np.frombuffer(data_raw_be, dtype=">u2", count=n_words)
 
@@ -187,20 +194,14 @@ if __name__ == "__main__":
         DEFAULT_TIMEOUT = 5
 
         def __init__(self, host, port=9002):
-            FpgaClientBase.__init__(self,
-                                     send_data_cb=self._handle_send_data,
-                                     require_data_cb=self._handle_require_data)
+            FpgaClientBase.__init__(self)
             self.__socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.__socket.settimeout(SimpleFaoutClient.DEFAULT_TIMEOUT)
+            self.__socket.settimeout(SimpleFpgaClient.DEFAULT_TIMEOUT)
             self.__socket.connect((host, port))
+            # initialize device map by getting the device list after connect
+            self.get_device_list()
 
-        def _handle_require_data(self):
-            data = self.__socket.recv(8*1024)
-            if not data:
-                raise RuntimeError("no response from server")
-            self._parse_bytes(data)
-
-        def _handle_send_data(self, data):
+        def _write_data(self, data):
             bytes_sent = 0
             bytes_total = len(data)
             while bytes_sent < bytes_total:
@@ -209,29 +210,33 @@ if __name__ == "__main__":
                     raise RuntimeError("connection closed")
                 bytes_sent += n
 
+        def _require_data(self):
+            data = self.__socket.recv(8*1024)
+            if not data:
+                raise RuntimeError("no response from server")
+            self._parse_data(data)
+
+        def _device_added(self, serial, device):
+            print("Device added: %s" % serial)
+
+        def _device_removed(self, serial):
+            print("Device removed: %s" % serial)
+
         def wait_for_events(self):
-            while not self._events:
-                try:
-                    data = self.__socket.recv(8*1024)
-                    self._parse_bytes(data)
-                except socket.timeout:
-                    pass
-            events_copy = list(self._events)
-            del self._events[:]
-            return events_copy
+            try:
+                data = self.__socket.recv(8*1024)
+                self._parse_data(data)
+            except socket.timeout:
+                pass
 
     parser = argparse.ArgumentParser(description='Fpga-Client Example')
     parser.add_argument('host', nargs='?', default='localhost')
     parser.add_argument('port', nargs='?', type=int, default=9002)
     args = parser.parse_args()
 
+    print("Connecting to %s" % args.host)
     client = SimpleFpgaClient(args.host, args.port)
-    print 'Connected to %s' % args.host
-    devices = client.get_device_list()
-    assert devices, "No devices connected"
-    print("Connected devices: %s" % (", ".join(devices)))
     print("")
     print("Waiting for events")
     while 1:
-        for event in client.wait_for_events():
-            print(event)
+        client.wait_for_events()

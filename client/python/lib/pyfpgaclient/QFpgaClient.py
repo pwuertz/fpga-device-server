@@ -11,7 +11,7 @@ class QFpgaDevice(QtCore.QObject, FpgaDevice):
         QtCore.QObject.__init__(self, client=client, serial=serial)
         self.__registerChangedQueue.connect(self.registerChanged, type=QtCore.Qt.QueuedConnection)
 
-    def _handle_reg_changed(self, addr, port, value):
+    def _reg_changed(self, addr, port, value):
         self.__registerChangedQueue.emit(addr, port, value)
 
 
@@ -25,12 +25,7 @@ class QFpgaClient(QtCore.QObject, FpgaClientBase):
     __deviceRemovedQueue = QtCore.pyqtSignal(str)
 
     def __init__(self, host, port=9002):
-        QtCore.QObject.__init__(self,
-                                send_data_cb=self._handle_send_data,
-                                require_data_cb=self._handle_require_data,
-                                device_added_cb=lambda *x: self.__deviceAddedQueue.emit(*x),
-                                device_removed_cb=lambda *x: self.__deviceRemovedQueue.emit(*x)
-                                )
+        QtCore.QObject.__init__(self)
         # always queue added, removed or event callbacks in order to
         # prevent event processing within synchronous calls
         self.__deviceAddedQueue.connect(self.deviceAdded, type=QtCore.Qt.QueuedConnection)
@@ -40,7 +35,7 @@ class QFpgaClient(QtCore.QObject, FpgaClientBase):
         self.__host = host
         self.__port = port
         self.__socket = QtNetwork.QTcpSocket()
-        self.__socket.readyRead.connect(self._handle_ready_read)
+        self.__socket.readyRead.connect(self.__handle_ready_read)
         # TODO: handle other signals, like disconnected or error
 
     def connect(self):
@@ -56,25 +51,24 @@ class QFpgaClient(QtCore.QObject, FpgaClientBase):
         # remove all devices
         device_list = list(self._devices.keys())
         for serial in device_list:
-            self._handle_removed(serial)
+            self.__handle_removed(serial)
 
         # disconnect
         if self.__socket.isOpen():
             self.__socket.close()
 
-    def _handle_ready_read(self):
+    def _device_added(self, serial, device):
+        self.__deviceAddedQueue.emit(serial, device)
+
+    def _device_removed(self, serial):
+        self.__deviceRemovedQueue.emit(serial)
+
+    def __handle_ready_read(self):
         if self.__socket.bytesAvailable():
             data = self.__socket.read(self.__socket.bytesAvailable())
-            self._parse_bytes(data)
+            self._parse_data(data)
 
-    def _handle_require_data(self):
-        ready = self.__socket.waitForReadyRead(QFpgaClient.DEFAULT_TIMEOUT * 1000)
-        if not ready:
-            raise RuntimeError("no response from server")
-        data = self.__socket.read(self.__socket.bytesAvailable())
-        self._parse_bytes(data)
-
-    def _handle_send_data(self, data):
+    def _write_data(self, data):
         bytes_sent = 0
         bytes_total = len(data)
         while bytes_sent < bytes_total:
@@ -82,3 +76,10 @@ class QFpgaClient(QtCore.QObject, FpgaClientBase):
             if n <= 0:
                 raise RuntimeError("could not write data")
             bytes_sent += n
+
+    def _require_data(self):
+        ready = self.__socket.waitForReadyRead(QFpgaClient.DEFAULT_TIMEOUT * 1000)
+        if not ready:
+            raise RuntimeError("no response from server")
+        data = self.__socket.read(self.__socket.bytesAvailable())
+        self._parse_data(data)
