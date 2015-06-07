@@ -111,7 +111,10 @@ DeviceManager::DeviceManager(boost::asio::io_service& io_service,
 				// setup register tracking information and set callback
 				for (auto& addr_port: desc->watchlist)
 					device->trackReg(addr_port.first, addr_port.second);
-				device->setRegChangedCallback(m_device_reg_change_cb);  // TODO: post callback to asio loop?
+				device->setRegChangedCallback([this](const std::string& serial, uint8_t addr, uint8_t port, uint16_t value) {
+					// TODO: post callback to asio loop?
+					if (m_device_reg_change_cb) m_device_reg_change_cb(serial, addr, port, value);
+				});
 
 			} catch (const std::exception& e) {
 				std::cerr << "Adding device failed: " << e.what() << std::endl;
