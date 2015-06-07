@@ -233,6 +233,7 @@ void Device::trackReg(uint8_t addr, uint8_t port, bool enabled) {
 }
 
 void Device::updateTrackedRegs() {
+	if (m_tracked_regs.empty()) return;
 	// send multiple register read commands
 	uint16_t rd_cmd[m_tracked_regs.size()];
 	{
