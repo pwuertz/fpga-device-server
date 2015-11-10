@@ -1,3 +1,4 @@
+import numpy as np
 
 SDRAM_MAX_ADDR = 2**23-1
 
@@ -13,6 +14,9 @@ ADDR_INTERP = 3
 ADDR_SEQ = 4
 
 class FaoutMixin(object):
+
+    fixed_to_float = mapfunc_fixed_to_float(-10, 10, np.uint16)
+    float_to_fixed = mapfunc_float_to_fixed(-10, 10, np.uint16)
 
     def get_device_status(self):
         value = self.read_reg(ADDR_REGS, REG_STATUS)
@@ -86,6 +90,14 @@ class FaoutMixin(object):
     def set_clock_extern(self, enabled):
         return self.set_config_bit(0, enabled)
 
+    def read_voltage(self, dac_index):
+        fixed = self.read_dac(dac_index=dac_index)
+        return self.fixed_to_float(fixed)
+
+    def write_voltage(self, dac_index, voltage):
+        fixed = self.float_to_fixed(voltage)
+        self.write_dac(dac_index=dac_index, value=fixed)
+
 
     @staticmethod
     def _status_to_dict(status_val):
@@ -124,5 +136,33 @@ class FaoutMixin(object):
         steps = self.read_reg(ADDR_INTERP, index+6)
         value = self.read_reg(ADDR_INTERP, index)
         return value, steps
+
+def mapfunc_float_to_fixed(from_min, from_max, to_idtype):
+    """
+    Create map function from float interval to numpy integer type.
+    """
+    iinfo = np.iinfo(to_idtype)
+    to_min = iinfo.min
+    to_max = iinfo.max
+    def map_values(v):
+        v_norm = (np.clip(v, from_min, from_max)-from_min) * (1./(from_max-from_min))
+        mapped = v_norm * (to_max-to_min) + to_min
+        return np.array(mapped, dtype=to_idtype)
+    return map_values
+
+def mapfunc_fixed_to_float(to_min, to_max, from_idtype):
+    """
+    Create map function from numpy integer type to float interval.
+    """
+    iinfo = np.iinfo(from_idtype)
+    from_min = float(iinfo.min)
+    from_max = float(iinfo.max)
+    def map_values(v):
+        v = np.asarray(v, dtype=from_idtype)
+        v_norm = (v-from_min) * (1./(from_max-from_min))
+        mapped = v_norm * (to_max-to_min) + to_min
+        return mapped
+    return map_values
+
 
 

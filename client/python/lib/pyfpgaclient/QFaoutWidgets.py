@@ -1,11 +1,9 @@
-import inspect
-import numpy as np
+# coding:utf-8
+"""
 
-from PyQt5 import QtCore, QtGui, QtWidgets
-from IPython.qt.console.rich_ipython_widget import RichIPythonWidget, IPythonWidget
-from IPython.qt.inprocess import QtInProcessKernelManager
-from QFaoutClient import QFaoutClient
+"""
 
+from PyQt5 import QtWidgets, QtCore, QtGui
 
 class Controls(QtWidgets.QWidget):
     def __init__(self, device):
@@ -65,25 +63,30 @@ class Sliders(QtWidgets.QWidget):
 
     def __init__(self, device):
         QtWidgets.QWidget.__init__(self)
-        layout = QtWidgets.QHBoxLayout(self)
+        layout = QtWidgets.QGridLayout(self)
 
         def gen_write_func(device, ch):
             def write_func(val):
-                val = int(0xffff * (val/1000.))
-                device.write_dac(ch, val)
+                device.write_voltage(ch, val)
             return write_func
 
         self.sliders = []
         for i in range(6):
             slider = QtWidgets.QSlider()
-            slider.setRange(0, 1000)
+            slider.setRange(-10, 10)
             slider.valueChanged.connect(gen_write_func(device, i))
             self.sliders.append(slider)
-            layout.addWidget(slider)
+            layout.addWidget(slider, i, 0)
+
+            edit = QtWidgets.QLineEdit()
+            edit.setValidator(QtGui.QDoubleValidator())
+            edit.validator().setRange(-10, 10, 3)
+            edit.textChanged.connect(slider.setValue)
+            layout.addWidget(edit, i , 1)
 
         for i in range(6):
-            v = device.read_dac(i)
-            self.sliders[i].setValue(int(v * (1./0xffff) * 1000.))
+            v = device.read_voltage(i)
+            self.sliders[i].setValue(v)
 
 
 class Status(QtWidgets.QWidget):
@@ -123,36 +126,8 @@ class Config(QtWidgets.QWidget):
         layout.addRow("Clock Ext", cb_clk_ext)
 
 
-class DeviceMeta(type):
-    def __new__(cls, name, parents, dct):
-        def func_wrapper_gen(func):
-            return lambda self, *args: func(self.client, self.serial, *args)
-
-        for (n, o) in inspect.getmembers(QFaoutClient, inspect.ismethod):
-            args = inspect.getargspec(o).args
-            if len(args) >= 2 and args[1] == "serial":
-                dct[n] = func_wrapper_gen(o)
-                dct[n].__doc__ = o.__doc__
-                dct[n].__name__ = o.__name__
-        return super(DeviceMeta, cls).__new__(cls, name, parents, dct)
-
-
-class Device(object):
-    __metaclass__ = DeviceMeta
-
-    def __init__(self, client, serial):
-        self.client = client
-        self.serial = serial
-
-    def __str__(self):
-        return self.serial
-
-    def __repr__(self):
-        return "<Device: %s>" % self.serial
-
-
 class DeviceWidget(QtWidgets.QWidget):
-    def __init__(self, device):
+    def __init__(self, device, shell):
         QtWidgets.QWidget.__init__(self)
         layout = QtWidgets.QHBoxLayout(self)
 
@@ -165,75 +140,3 @@ class DeviceWidget(QtWidgets.QWidget):
         addBoxedWidget("Controls", Controls(device))
         addBoxedWidget("Status Register", Status(device))
         addBoxedWidget("Config Register", Config(device))
-
-
-class Main(QtWidgets.QWidget):
-    def __init__(self, client):
-        QtWidgets.QWidget.__init__(self)
-        self.client = client
-        self.devices = []
-
-        # build layout
-        layout = QtWidgets.QVBoxLayout(self)
-
-        # tab widget for each connected device
-        self.device_tabs = QtWidgets.QTabWidget()
-        self.device_tabs.currentChanged.connect(self.onCurrentDeviceChanged)
-        layout.addWidget(self.device_tabs)
-
-        # ipython console for scripting
-        kernel_manager = QtInProcessKernelManager()
-        kernel_manager.start_kernel()
-        kernel_client = kernel_manager.client()
-        kernel_client.start_channels()
-        self._console = IPythonWidget(font_size=9)
-        self._console.kernel_manager = kernel_manager
-        self._console.kernel_client = kernel_client
-        layout.addWidget(self._console)
-
-        # add devices that are already present and handlers for hotplugging
-        for serial in client.get_device_list():
-            self.addDevice(serial)
-        client.deviceAdded.connect(self.addDevice)
-        client.deviceRemoved.connect(self.removeDevice)
-
-        # push client and device list to console namespace
-        dct = {"client": client, "devices": self.devices}
-        kernel_manager.kernel.shell.push(dct)
-
-        self.resize(300, 600)
-        self.setWindowTitle("FAout Test Application")
-    
-    def addDevice(self, serial):
-        device = Device(self.client, serial)
-        self.devices.append(device)
-        device_widget = DeviceWidget(device)
-        self.device_tabs.addTab(device_widget, serial)
-
-    def removeDevice(self, serial):
-        for i in range(self.device_tabs.count()):
-            if self.device_tabs.tabText(i) == serial:
-                del self.devices[i]
-                self.device_tabs.removeTab(i)
-                return
-
-    def onCurrentDeviceChanged(self, index):
-        if index >= 0:
-            dct = {"dev": self.devices[index]}
-        else:
-            dct = {"dev": None}
-        self._console.kernel_manager.kernel.shell.push(dct)
-
-
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description='FAout Test Application')
-    parser.add_argument('host', nargs='?', default='localhost')
-    parser.add_argument('port', nargs='?', type=int, default=9002)
-
-    args = parser.parse_args()
-    app = QtWidgets.QApplication([])
-    client = QFaoutClient(args.host, args.port)
-    win = Main(client)
-    win.show()
-    app.exec_()
