@@ -1,4 +1,4 @@
-from FpgaClientBase import FpgaClientBase, FpgaDevice
+from pyfpgaclient.FpgaClientBase import FpgaClientBase, FpgaDevice
 from PyQt5 import QtCore, QtNetwork
 
 

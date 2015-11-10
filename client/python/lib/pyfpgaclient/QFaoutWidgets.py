@@ -59,34 +59,52 @@ class Controls(QtWidgets.QWidget):
         layout_bns.addWidget(bn_reset, 1, 2)
 
 
+class ValueWidget(QtCore.QObject):
+    def __init__(self, device, ch):
+        QtCore.QObject.__init__(self)
+        slider = QtWidgets.QSlider()
+        slider.setRange(0, 1000)
+
+        slider.valueChanged.connect(self._setValue)
+
+        edit = QtWidgets.QLineEdit()
+        edit.setMaxLength(6)
+        edit.setValidator(QtGui.QDoubleValidator())
+        edit.validator().setRange(-10, 10, 3)
+        edit.returnPressed.connect(lambda: self.setVoltage(float(edit.text())))
+
+        self.device = device
+        self.slider = slider
+        self.edit = edit
+        self.ch = ch
+
+    def _setValue(self, v):
+        voltage = float(20.e-3 * v -10.)
+        self.edit.setText("%.3f" % (voltage))
+        self.device.write_voltage(self.ch, voltage)
+
+    def setVoltage(self, voltage):
+        self.edit.setText("%.3f" % (voltage))
+        slider_value = int((voltage+10.)/20.*1e3)
+        self.slider.setValue(slider_value)
+
+
 class Sliders(QtWidgets.QWidget):
 
     def __init__(self, device):
         QtWidgets.QWidget.__init__(self)
         layout = QtWidgets.QGridLayout(self)
 
-        def gen_write_func(device, ch):
-            def write_func(val):
-                device.write_voltage(ch, val)
-            return write_func
-
-        self.sliders = []
+        self.values = []
         for i in range(6):
-            slider = QtWidgets.QSlider()
-            slider.setRange(-10, 10)
-            slider.valueChanged.connect(gen_write_func(device, i))
-            self.sliders.append(slider)
-            layout.addWidget(slider, i, 0)
-
-            edit = QtWidgets.QLineEdit()
-            edit.setValidator(QtGui.QDoubleValidator())
-            edit.validator().setRange(-10, 10, 3)
-            edit.textChanged.connect(slider.setValue)
-            layout.addWidget(edit, i , 1)
+            value = ValueWidget(device, i)
+            self.values.append(value)
+            layout.addWidget(value.slider, 0, i)
+            layout.addWidget(value.edit, 1, i)
 
         for i in range(6):
             v = device.read_voltage(i)
-            self.sliders[i].setValue(v)
+            self.values[i].setVoltage(v)
 
 
 class Status(QtWidgets.QWidget):
@@ -105,7 +123,6 @@ class Status(QtWidgets.QWidget):
         layout.addRow("Firmware", QtWidgets.QLabel(str(device.get_version())))
 
         self.device = device
-        device.client.statusChanged.connect(self.handleStatus)
 
     def handleStatus(self, serial, status_dict):
         if self.device.serial == serial:

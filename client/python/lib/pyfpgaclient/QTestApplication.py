@@ -2,10 +2,18 @@ import inspect
 import numpy as np
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from IPython.qt.console.rich_ipython_widget import RichIPythonWidget, IPythonWidget
-from IPython.qt.inprocess import QtInProcessKernelManager
-import IPython.display
-from QFpgaClient import QFpgaClient
+try:
+    from IPython.qt.console.rich_ipython_widget import RichIPythonWidget, IPythonWidget
+    from IPython.qt.inprocess import QtInProcessKernelManager
+except ImportError:
+    # try qtconsole which is more recentfrom qtconsole.inprocess import QtInProcessKernelManager
+    from qtconsole.rich_jupyter_widget import RichJupyterWidget as RichIPythonWidget, JupyterWidget as IPythonWidget
+    from qtconsole.inprocess import QtInProcessKernelManager
+
+from IPython.display import display
+
+from pyfpgaclient.QFpgaClient import QFpgaClient
+from pyfpgaclient.QFaoutWidgets import DeviceWidget as FAoutDeviceWidget
 
 
 class QDeviceWidget(QtWidgets.QWidget):
@@ -26,7 +34,7 @@ class QDeviceWidget(QtWidgets.QWidget):
             def wrap_gen(n, m):
                 def callfunc():
                     result = m()
-                    IPython.display.display("dev.%s(): %s" % (n, result))
+                    display("dev.%s(): %s" % (n, result))
                 return callfunc
             btn.clicked.connect(wrap_gen(n, m))
             layout_methods.addWidget(btn)
@@ -117,6 +125,7 @@ def run():
     args = parser.parse_args()
     app = QtWidgets.QApplication([])
     client = QFpgaClient(args.host, args.port)
+    QTestApplication.DEVICE_WIDGET_MAP['FAOUT'] = FAoutDeviceWidget
     win = QTestApplication(client)
     win.show()
     app.exec_()
