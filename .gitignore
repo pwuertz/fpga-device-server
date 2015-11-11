@@ -2,3 +2,5 @@ build*
 *.o
 *.pyc
 *~
+.idea
+*.egg-info
