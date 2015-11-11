@@ -69,8 +69,6 @@ class ValueWidget(QtCore.QObject):
 
         edit = QtWidgets.QLineEdit()
         edit.setMaxLength(6)
-        edit.setValidator(QtGui.QDoubleValidator())
-        edit.validator().setRange(-10, 10, 3)
         edit.returnPressed.connect(lambda: self.setVoltage(float(edit.text())))
 
         self.device = device
@@ -85,7 +83,7 @@ class ValueWidget(QtCore.QObject):
 
     def setVoltage(self, voltage):
         self.edit.setText("%.3f" % (voltage))
-        slider_value = int((voltage+10.)/20.*1e3)
+        slider_value = round((voltage+10.)/20.*1e3)
         self.slider.setValue(slider_value)
 
 
