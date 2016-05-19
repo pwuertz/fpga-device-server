@@ -15,7 +15,7 @@ Config Config::fromFile(std::string fname) {
 	// parse json and store root object
 	std::string err;
 	json11::Json root(json11::Json::parse(content.c_str(), err));
-	if (!err.empty()) throw std::runtime_error(err);
+    if (!err.empty()) throw std::runtime_error("Error reading configuration (" + err + ")");
 
 	Config config;
 	// build device descriptions from json structure
