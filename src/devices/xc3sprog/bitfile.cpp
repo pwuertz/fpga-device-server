@@ -52,7 +52,7 @@ int BitFile::readBitfile(FILE *fp)
   try {  
     { // Skip the header
       char hdr[13];
-      int r = fread(hdr, 1, 13, fp); // 13 byte header
+      fread(hdr, 1, 13, fp); // 13 byte header
     }
     
     char         key;
@@ -60,7 +60,7 @@ int BitFile::readBitfile(FILE *fp)
     std::string  dummy;
     
     while(!feof(fp)) {
-    	int r = fread(&key, 1, 1, fp);
+      fread(&key, 1, 1, fp);
       switch(key) {
       case 'a': field = &ncdFilename; break;
       case 'b': field = &partName;    break;
@@ -99,7 +99,7 @@ int  BitFile::readBIN(FILE *fp, bool do_bitrev)
     buffer= new byte[length];
     if (buffer == 0)
         return 1;
-    int r = fread(buffer,1, length, fp);
+    fread(buffer,1, length, fp);
 
     if (!do_bitrev)
 	    return 0;
@@ -334,18 +334,18 @@ int BitFile::readFile(FILE *fp, FILE_STYLE in_style)
 void BitFile::processData(FILE *fp)
 {
   byte t[4];
-  int r = fread(t,1,4,fp);
+  fread(t,1,4,fp); 
   length=(t[0]<<24)+(t[1]<<16)+(t[2]<<8)+t[3];
   if(buffer) delete [] buffer;
   buffer=new byte[length];
   for(unsigned int i=0; i<length&&!feof(fp); i++){
     byte b;
-    r = fread(&b,1,1,fp);
+    fread(&b,1,1,fp);
     buffer[i]=bitRevTable[b]; // Reverse the bit order.
   }
   if(feof(fp))  throw std::runtime_error("Unexpected end of file");
 
-  r = fread(t,1,1,fp);
+  fread(t,1,1,fp);
   if(!feof(fp))  error("Ignoring extra data at end of file");
 }
 
@@ -390,7 +390,7 @@ void BitFile::append(char const *fname) {
       if(feof(fp))  throw std::runtime_error("Unexpected end of file");
       
       byte  b;
-      int r = fread(&b, 1, 1, fp);
+      fread(&b, 1, 1, fp);
       buffer[i] = bitRevTable[b]; // Reverse the bit order.
     }
     length = nlen;
@@ -617,11 +617,11 @@ void BitFile::error(const string &str)
 void BitFile::readField(string &field, FILE *fp)
 {
   byte t[2];
-  int r = fread(t,1,2,fp);
+  fread(t,1,2,fp); 
   unsigned short len=(t[0]<<8)+t[1];
   for(int i=0; i<len; i++){
     byte b;
-    r = fread(&b,1,1,fp);
+    fread(&b,1,1,fp);
     field+=(char)b;
   }
 }
@@ -647,8 +647,9 @@ int BitFile::get_bit(unsigned int idx)
 {
      unsigned int bval, bit;
       bval = idx / 8;
-      if(bval >= length)
-	throw std::runtime_error(std::string("bit_get_fuse"));
+      /* Because of the clipping
+       we assume bit 1 if idx is beyond the file length. */
+      if(bval >= length) return 1;
       bit  = idx % 8;
       return (buffer[bval] & (1 << bit))? 1 : 0;
 }

@@ -52,6 +52,7 @@ IOFtdi::IOFtdi(libusb_device* dev, ftdi_interface interface, int freq)
 
 int IOFtdi::Init(libusb_device* dev, ftdi_interface interface, int freq)
 {
+  const char *serial = 0;
   unsigned char   buf1[5];
   unsigned char   buf[9] = { SET_BITS_LOW, 0x00, 0x0b,
 			     TCK_DIVISOR,  0x03, 0x00 ,
@@ -63,6 +64,8 @@ int IOFtdi::Init(libusb_device* dev, ftdi_interface interface, int freq)
   unsigned int dbus_data =0, dbus_en = 0xb, cbus_data= 0, cbus_en = 0;
   unsigned int divisor;
   int res;
+  char *p = 0;
+
 
       /* set for now. If we have a fast device, correct later */
   if ((freq == 0 )|| (freq >= 6000000)) /* freq = 0 means max rate, 3 MHz for now*/
@@ -74,7 +77,78 @@ int IOFtdi::Init(libusb_device* dev, ftdi_interface interface, int freq)
 
   buf[4] = divisor & 0xff;
   buf[5] = (divisor >> 8) & 0xff;
+
+  /* split string by hand for more flexibility*/
+  if (p)
+  {
+      vendor = strtol(p, NULL, 0);
+      p = strchr(p,':');
+      if(p)
+          p ++;
+  }
+  if (p)
+  {
+      product = strtol(p, NULL, 0);
+      p = strchr(p,':');
+      if(p)
+          p ++;
+  }
+  if (p)
+  {
+      char *q = strchr(p,':');
+      int len = q ? q-p : strlen(p);
+
+      if (len>0)
+      {
+          int num;
+          num = (len>255)?255:len;
+          strncpy(descstring, p, num);
+          descstring[num] = 0;
+		  description = descstring;
+      }
+      p = q;
+      if(p)
+          p ++;
+  }
+  if (p)
+  {
+      channel = strtol(p, NULL, 0);
+      p = strchr(p,':');
+      if(p)
+          p ++;
+  }
+  if (p)
+  {
+      dbus_data = strtol(p, NULL, 0);
+      p = strchr(p,':');
+      if(p)
+          p ++;
+  }
+  if (p)
+  {
+      dbus_en |= strtol(p, NULL, 0);
+      p = strchr(p,':');
+      if(p)
+          p ++;
+  }
+  if (p)
+  {
+      cbus_data = strtol(p, NULL, 0);
+      p = strchr(p,':');
+      if(p)
+          p ++;
+  }
+  if (p)
+  {
+      cbus_en = strtol(p, NULL, 0);
+      p = strchr(p,':');
+      if(p)
+          p ++;
+  }
   
+  if (verbose)
+  {
+  }
 
   if (!use_ftd2xx)
   {
@@ -274,10 +348,11 @@ int IOFtdi::Init(libusb_device* dev, ftdi_interface interface, int freq)
   if (!ftdi_handle)
 #endif
   {
-      fprintf(stderr, "Unable to access FTDI device\n");
+      fprintf(stderr, "Unable to access FTDI device with either libftdi or FTD2XX\n");
       res = 1;
       goto fail;
   }
+
   // Prepare for JTAG operation
   buf[1] |= dbus_data;
   buf[2] |= dbus_en;
@@ -578,28 +653,26 @@ unsigned int IOFtdi::readusb(unsigned char * rbuf, unsigned long len)
 
 void IOFtdi::deinit(void)
 {
-	try {
-		int read;
-		/* Before shutdown, we must wait until everything is shifted out
-		 * Do this by temporary enabling loopback mode, write something
-		 * and wait until we can read it back */
-		static unsigned char tbuf[16] = {
-				SET_BITS_LOW, 0xff, 0x00,
-				SET_BITS_HIGH, 0xff, 0x00,
-				LOOPBACK_START,
-				MPSSE_DO_READ | MPSSE_READ_NEG |
-				MPSSE_DO_WRITE | MPSSE_WRITE_NEG | MPSSE_LSB,
-				0x04, 0x00,
-				0xaa, 0x55, 0x00, 0xff, 0xaa,
-				LOOPBACK_END
-		};
-		mpsse_add_cmd(tbuf, 16);
-		read = readusb(tbuf,5);
-		if  (read != 5)
-			fprintf(stderr,"Loopback failed, expect problems on later runs\n");
-	} catch (...) {
-		fprintf(stderr,"Loopback failed, expect problems on later runs\n");
-	}
+  int read;
+  /* Before shutdown, we must wait until everything is shifted out
+     Do this by temporary enabling loopback mode, write something 
+     and wait until we can read it back */
+  static unsigned char   tbuf[16] = { SET_BITS_LOW, 0xff, 0x00,
+                                      SET_BITS_HIGH, 0xff, 0x00,
+                                      LOOPBACK_START,
+				      MPSSE_DO_READ|MPSSE_READ_NEG|
+				      MPSSE_DO_WRITE|MPSSE_WRITE_NEG|MPSSE_LSB, 
+				      0x04, 0x00,
+				      0xaa, 0x55, 0x00, 0xff, 0xaa, 
+				      LOOPBACK_END};
+  try {
+      mpsse_add_cmd(tbuf, 16);
+      read = readusb(tbuf, 5);
+      if (read != 5)
+          fprintf(stderr,"Loopback failed, expect problems on later runs\n");
+  } catch (...) {
+      fprintf(stderr,"Loopback failed, expect problems on later runs\n");
+  }
  
 #ifdef USE_FTD2XX 
   if (ftd2xx_handle)
@@ -607,7 +680,7 @@ void IOFtdi::deinit(void)
   else
 #endif
   {
-	  ftdi_set_bitmode(ftdi_handle, 0, BITMODE_RESET);
+      ftdi_set_bitmode(ftdi_handle, 0, BITMODE_RESET);
       ftdi_usb_reset(ftdi_handle);
       ftdi_usb_close(ftdi_handle);
       ftdi_free(ftdi_handle);

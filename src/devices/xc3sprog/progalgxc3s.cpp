@@ -216,11 +216,11 @@ void ProgAlgXC3S::array_program(BitFile &file)
 	jtag->cycleTCK(1);
 	if (*(long long*)data != -1LL)
 	  /* ISC_DNA only works on a unconfigured device, see AR #29977*/
-		/*
+	  /*
 	  fprintf(stderr, "DNA is 0x%02x%02x%02x%02x%02x%02x%02x%02x\n", 
 		 data[0], data[1], data[2], data[3], 
 		 data[4], data[5], data[6], data[7]);
-		 */
+	  */
 	break;
       }
     }

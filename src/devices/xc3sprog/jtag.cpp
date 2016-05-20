@@ -33,7 +33,6 @@ Jtag::Jtag(IOBase *iob)
   deviceIndex = -1;
   numDevices  = -1;
   shiftDRincomplete=false;
-  fp_svf = NULL;
   char *fname = getenv("JTAG_DEBUG");
   if (fname)
     fp_dbg = fopen(fname,"wb");
@@ -119,8 +118,9 @@ int Jtag::selectDevice(int dev)
 
 void Jtag::cycleTCK(int n, bool tdi)
 {
-  if(current_state==TEST_LOGIC_RESET)
-    //fprintf(stderr, "cycleTCK in TEST_LOGIC_RESET\n");
+  if(current_state==TEST_LOGIC_RESET) {
+      // fprintf(stderr, "cycleTCK in TEST_LOGIC_RESET\n");
+  }
   if(fp_dbg)
       fprintf(fp_dbg, "cycleTCK %d TDI %s\n", n, (tdi)?"TRUE":"FALSE");
    io->shift(tdi, n, false);
