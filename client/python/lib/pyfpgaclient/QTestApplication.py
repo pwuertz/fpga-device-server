@@ -2,14 +2,8 @@ import inspect
 import numpy as np
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-try:
-    from IPython.qt.console.rich_ipython_widget import RichIPythonWidget, IPythonWidget
-    from IPython.qt.inprocess import QtInProcessKernelManager
-except ImportError:
-    # try qtconsole which is more recentfrom qtconsole.inprocess import QtInProcessKernelManager
-    from qtconsole.rich_jupyter_widget import RichJupyterWidget as RichIPythonWidget, JupyterWidget as IPythonWidget
-    from qtconsole.inprocess import QtInProcessKernelManager
-
+from qtconsole.rich_jupyter_widget import RichJupyterWidget as RichIPythonWidget, JupyterWidget as IPythonWidget
+from qtconsole.inprocess import QtInProcessKernelManager
 from IPython.display import display
 
 from pyfpgaclient.QFpgaClient import QFpgaClient
