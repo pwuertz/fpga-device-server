@@ -151,14 +151,14 @@ void DeviceManager::_removeDevice(const std::string& serial) {
 
 void DeviceManager::_periodicRegisterUpdates() {
 	// poll tracked registers for all devices and emit callbacks
-	for (auto p: m_serial_map) {
+	for (auto p = m_serial_map.begin(); p != m_serial_map.end();) {
+		auto device = (p++)->second;
 		try {
-			auto device = p.second;
 			device->updateTrackedRegs();
 		} catch (std::exception& e) {
-			std::cerr << "Error polling registers of " << p.first;
+			std::cerr << "Error polling registers of " << device->name();
 			std::cerr << ", " << e.what() << std::endl;
-			_removeDevice(p.second->name());
+			_removeDevice(device->name());
 		}
 	}
 	// schedule next update
