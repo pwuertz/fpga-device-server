@@ -37,7 +37,7 @@ public:
 	}
 
 	~LibUsbDevice() {
-		if (!m_dev_handle) libusb_close(m_dev_handle);
+		if (m_dev_handle) libusb_close(m_dev_handle);
 	}
 
 	libusb_device_handle* m_dev_handle;
