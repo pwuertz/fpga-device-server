@@ -16,6 +16,7 @@ public:
 private:
 	IOFtdi m_ioftdi;
 	Jtag m_jtag;
+        int m_family;
 };
 
 #endif /* SRC_DEVICES_DEVICEPROGRAMMER_H_ */
