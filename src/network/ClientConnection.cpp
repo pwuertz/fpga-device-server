@@ -73,7 +73,7 @@ void ClientConnection::do_read() {
 				// forward parsed messages to handler
 				msgpack::unpacked result;
 				try {
-					while(m_msgbuffer_in.next(&result)) {
+					while(m_msgbuffer_in.next(result)) {
 						// handle received message
 						msgpack::object object = result.get();
 						auto buffer_out = std::make_shared<msgpack::sbuffer>();

@@ -31,5 +31,5 @@ pkg_check_modules(LIBUSB_1 REQUIRED libusb-1.0)
 find_package(Boost COMPONENTS system REQUIRED)
 
 add_executable(fpga-device-server ${SRCS})
-include_directories(src ${LIBUSB_1_INCLUDE_DIRS})
-target_link_libraries (fpga-device-server ${LIBUSB_1_LIBRARIES} ${Boost_SYSTEM_LIBRARY} pthread msgpack)
+include_directories(src src/msgpack-c/include ${LIBUSB_1_INCLUDE_DIRS})
+target_link_libraries (fpga-device-server ${LIBUSB_1_LIBRARIES} ${Boost_SYSTEM_LIBRARY} pthread)

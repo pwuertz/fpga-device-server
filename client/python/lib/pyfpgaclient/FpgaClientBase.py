@@ -107,7 +107,7 @@ class FpgaClientBase(object):
             return packet
 
     def __send_object(self, obj):
-        data = msgpack.packb(obj)
+        data = msgpack.packb(obj, use_bin_type=True)
         self._write_data(data)
 
     def __handle_added(self, serial):

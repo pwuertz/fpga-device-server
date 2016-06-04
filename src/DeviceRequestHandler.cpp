@@ -66,10 +66,10 @@ DeviceRequestHandler::DeviceRequestHandler(DeviceManager& manager) :
 			uint8_t addr = args.at(2).as<uint8_t>();
 			uint8_t port = args.at(3).as<uint8_t>();
 			// get argument 4 as uint16_t (be) buffer
-			if (args.at(4).type != msgpack::type::RAW)
+			if (args.at(4).type != msgpack::type::BIN)
 				RPC_REPLY_ERROR(reply, "Invalid argument");
-			uint16_t* data_be = (uint16_t*) args.at(4).via.raw.ptr;
-			size_t n_words = args.at(4).via.raw.size / sizeof(uint16_t);
+			uint16_t* data_be = (uint16_t*) args.at(4).via.bin.ptr;
+			size_t n_words = args.at(4).via.bin.size / sizeof(uint16_t);
 
 			device->writeRegN(addr, port, data_be, n_words);
 			RPC_REPLY_VALUE(reply, 0);
@@ -99,7 +99,7 @@ void DeviceRequestHandler::handleRequest(msgpack::object& request,
 	// basic protocol: request is an array of objects
 	std::vector<msgpack::object> args;
 	try {
-		request.convert(&args);
+		request.convert(args);
 	} catch (const std::exception& e) {
 		 RPC_REPLY_ERROR(reply, "Invalid message");
 		 return;
@@ -108,7 +108,7 @@ void DeviceRequestHandler::handleRequest(msgpack::object& request,
 	// first object is the command string
 	std::string cmd;
 	try {
-		args.at(0).convert(&cmd);
+		args.at(0).convert(cmd);
 	} catch (const std::exception& e) {
 		RPC_REPLY_ERROR(reply, "Invalid message");
 		return;
