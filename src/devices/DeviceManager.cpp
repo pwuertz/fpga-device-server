@@ -195,6 +195,8 @@ bool DeviceManager::reprogramDevice(ptrDevice_t device) {
 		device->open();
 		throw;
 	}
+	std::cout << "Finished programming " << device->name() << std::endl;
+
 	device->open();
 	return true;
 }
