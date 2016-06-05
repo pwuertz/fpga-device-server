@@ -20,7 +20,6 @@ public:
 	    if ((r = libusb_get_device_descriptor(dev, &m_desc)) < 0) {
 	    	throw std::runtime_error(libusb_error_name(r));
 	    }
-
 	    if ((r = libusb_open(dev, &m_dev_handle)) < 0) {
 	    	throw std::runtime_error(libusb_error_name(r));
 	    }
@@ -56,6 +55,7 @@ void getUsbDeviceStrings(libusb_device* dev,
 DeviceManager::DeviceManager(boost::asio::io_service& io_service,
 		boost::asio::libusb_service& usb_service,
 		device_descriptions_t device_descriptions) :
+	m_io_service(io_service),
 	m_timer(io_service),
 	m_libusb_service(usb_service),
 	m_device_map(),
@@ -65,65 +65,21 @@ DeviceManager::DeviceManager(boost::asio::io_service& io_service,
 	m_device_removed_cb(),
 	m_device_reg_change_cb()
 {
-	// handler for added or removed FTDI devices
+	// libusb hotplug handler for FTDI devices
+	// don't communicate with the device from within the hotplug handler, defer to event loop
+	// TODO: maybe libusb_service should post to the event loop so we don't have to?
 	int faout_vid = 0x0403;
 	int faout_pid = 0x6010;
 	m_libusb_service.addHotplugHandler(faout_vid, faout_pid, LIBUSB_HOTPLUG_MATCH_ANY,
 			[this](libusb_context* ctx, libusb_device* dev, libusb_hotplug_event ev) {
 		if (ev == LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED) {
-			// filter out spurious events just in case
-			if (hasDevice(dev))
-				return;
-
-			try {
-				// get strings from usb device
-				std::string manufacturer, product, serial;
-				getUsbDeviceStrings(dev, manufacturer, product, serial);
-				std::cout << "New device: " << product << ", " << manufacturer << ", " << serial << std::endl;
-
-				// make sure the serial is unique
-				if (hasSerial(serial)) {
-					std::cerr << "Not adding device with duplicate serial=" << serial << std::endl;
-					return;
-				}
-
-				// search device description based on serial
-				auto desc = find_description(serial, m_device_descriptions);
-				if (desc == m_device_descriptions.cend()) {
-					std::cout << "Ignoring device (serial=" << serial << ")" << std::endl;
-					return;
-				}
-
-				// create new device, this initialization process may also bring back stalled devices
-				std::cout << "Adding " << serial << ": " << desc->name << std::endl;
-				auto device = std::make_shared<Device>(dev, serial);
-
-				// program the device if bitfile is defined
-				reprogramDevice(device);
-
-				// add new device to manager
-				m_device_map.insert(std::make_pair(dev, device->shared_from_this()));
-				m_serial_map.insert(std::make_pair(device->name(), device->shared_from_this()));
-
-				// emit added callback
-				if (m_device_added_cb) m_device_added_cb(device->name());  // TODO: post callback to asio loop?
-
-				// setup register tracking information and set callback
-				for (auto& addr_port: desc->watchlist)
-					device->trackReg(addr_port.first, addr_port.second);
-				device->setRegChangedCallback([this](const std::string& serial, uint8_t addr, uint8_t port, uint16_t value) {
-					// TODO: post callback to asio loop?
-					if (m_device_reg_change_cb) m_device_reg_change_cb(serial, addr, port, value);
-				});
-
-			} catch (const std::exception& e) {
-				std::cerr << "Adding device failed: " << e.what() << std::endl;
-			}
+			m_io_service.post([this, dev](){
+				_usbDeviceAdded(dev);
+			});
 		} else {
-			if (hasDevice(dev)) {
-				const std::string& serial = m_device_map[dev]->name();
-				_removeDevice(serial);
-			}
+			m_io_service.post([this, dev](){
+				_usbDeviceRemoved(dev);
+			});
 		}
 	});
 
@@ -133,6 +89,64 @@ DeviceManager::DeviceManager(boost::asio::io_service& io_service,
 
 DeviceManager::~DeviceManager() {
 	stop();
+}
+
+void DeviceManager::_usbDeviceAdded(libusb_device* dev) {
+	// filter out spurious events just in case
+	if (hasDevice(dev))
+		return;
+
+	try {
+		// get strings from usb device
+		std::string manufacturer, product, serial;
+		getUsbDeviceStrings(dev, manufacturer, product, serial);
+		std::cout << "New device: " << product << ", " << manufacturer << ", " << serial << std::endl;
+
+		// make sure the serial is unique
+		if (hasSerial(serial)) {
+			std::cerr << "Not adding device with duplicate serial=" << serial << std::endl;
+			return;
+		}
+
+		// search device description based on serial
+		auto desc = find_description(serial, m_device_descriptions);
+		if (desc == m_device_descriptions.cend()) {
+			std::cout << "Ignoring device (serial=" << serial << ")" << std::endl;
+			return;
+		}
+
+		// create new device, this initialization process may also bring back stalled devices
+		std::cout << "Adding " << serial << ": " << desc->name << std::endl;
+		auto device = std::make_shared<Device>(dev, serial);
+
+		// program the device if bitfile is defined
+		reprogramDevice(device);
+
+		// add new device to manager
+		m_device_map.insert(std::make_pair(dev, device->shared_from_this()));
+		m_serial_map.insert(std::make_pair(device->name(), device->shared_from_this()));
+
+		// emit added callback
+		if (m_device_added_cb) m_device_added_cb(device->name());  // TODO: post callback to asio loop?
+
+		// setup register tracking information and set callback
+		for (auto& addr_port: desc->watchlist)
+			device->trackReg(addr_port.first, addr_port.second);
+		device->setRegChangedCallback([this](const std::string& serial, uint8_t addr, uint8_t port, uint16_t value) {
+			// TODO: post callback to asio loop?
+			if (m_device_reg_change_cb) m_device_reg_change_cb(serial, addr, port, value);
+		});
+
+	} catch (const std::exception& e) {
+		std::cerr << "Adding device failed: " << e.what() << std::endl;
+	}
+}
+
+void DeviceManager::_usbDeviceRemoved(libusb_device* dev) {
+	if (hasDevice(dev)) {
+		const std::string& serial = m_device_map[dev]->name();
+		_removeDevice(serial);
+	}
 }
 
 void DeviceManager::_removeDevice(const std::string& serial) {
