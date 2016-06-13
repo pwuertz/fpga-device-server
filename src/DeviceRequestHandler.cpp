@@ -66,8 +66,10 @@ DeviceRequestHandler::DeviceRequestHandler(DeviceManager& manager) :
 			uint8_t addr = args.at(2).as<uint8_t>();
 			uint8_t port = args.at(3).as<uint8_t>();
 			// get argument 4 as uint16_t (be) buffer
-			if (args.at(4).type != msgpack::type::BIN)
+			if (args.at(4).type != msgpack::type::BIN) {
 				RPC_REPLY_ERROR(reply, "Invalid argument");
+				return;
+			}
 			uint16_t* data_be = (uint16_t*) args.at(4).via.bin.ptr;
 			size_t n_words = args.at(4).via.bin.size / sizeof(uint16_t);
 
@@ -87,6 +89,34 @@ DeviceRequestHandler::DeviceRequestHandler(DeviceManager& manager) :
 			std::vector<uint16_t> data_be(n_words);
 			device->readRegN(addr, port, data_be.data(), n_words);
 			RPC_REPLY_BINARY(reply, (char*) data_be.data(), n_words*sizeof(uint16_t));
+		} else {
+			RPC_REPLY_ERROR(reply, "Unknown device");
+		}
+	};
+
+	m_functions["writeraw"] = [&](msgpack_args_t& args, msgpack_reply_t& reply) {
+		auto device = m_manager.getDevice(args.at(1).as<std::string>());
+		if (device) {
+			if (args.at(2).type != msgpack::type::BIN) {
+				RPC_REPLY_ERROR(reply, "Invalid argument");
+				return;
+			}
+			uint8_t* datawr = (uint8_t*) args.at(2).via.bin.ptr;
+			size_t n_bytes = args.at(2).via.bin.size;
+			device->writeRaw(datawr, n_bytes);
+			RPC_REPLY_VALUE(reply, 0);
+		} else {
+			RPC_REPLY_ERROR(reply, "Unknown device");
+		}
+	};
+
+	m_functions["readraw"] = [&](msgpack_args_t& args, msgpack_reply_t& reply) {
+		auto device = m_manager.getDevice(args.at(1).as<std::string>());
+		if (device) {
+			uint32_t n_bytes = args.at(2).as<uint32_t>();
+			std::vector<uint8_t> datard(n_bytes);
+			device->readRaw(datard.data(), n_bytes);
+			RPC_REPLY_BINARY(reply, (char*) datard.data(), n_bytes);
 		} else {
 			RPC_REPLY_ERROR(reply, "Unknown device");
 		}

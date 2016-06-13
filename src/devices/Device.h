@@ -22,6 +22,8 @@ public:
 
 	libusb_device* libusbDevice();
 
+	void writeRaw(const uint8_t* data, const size_t n);
+	void readRaw(uint8_t* data, const size_t n);
 	void writeReg(uint8_t addr, uint8_t port, uint16_t value);
 	void readReg(uint8_t addr, uint8_t port, uint16_t* value);
 	void writeRegN(uint8_t addr, uint8_t port, const uint16_t* data_be, size_t n);

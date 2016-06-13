@@ -99,18 +99,6 @@ void Device::close() {
 	}
 }
 
-void Device::writeReg(uint8_t addr, uint8_t port, uint16_t value) {
-	// send register write command
-	uint16_t wr_cmd[] = {
-			htobe16((CMD_WRITEREG << 12) | ((addr & 0x3f) << 6) | (port & 0x3f)),
-			htobe16(value)
-	};
-	int n = ftdi_write_data(m_ftdi, (unsigned char*) wr_cmd, sizeof(wr_cmd));
-	if (n != sizeof(wr_cmd)) {
-		throw std::runtime_error("FTDI write error");
-	}
-}
-
 void ftdi_read_data_wait(struct ftdi_context *ftdi, unsigned char *buf, int size) {
 	// TODO: proper timeout implementation
 
@@ -135,6 +123,38 @@ void ftdi_read_data_wait(struct ftdi_context *ftdi, unsigned char *buf, int size
 	if (sz_recv != size) {
 		std::cerr << "FTDI read timeout" << std::endl;
 		throw std::runtime_error("FTDI read timeout");
+	}
+}
+
+void Device::writeRaw(const uint8_t* data, const size_t n) {
+	if (n == 0) return;
+	// send N bytes to device
+	size_t n_sent = 0;
+	while (n_sent != n) {
+		int r = ftdi_write_data(m_ftdi, (unsigned char*) (data+n_sent), n-n_sent);
+		if (r <= 0) {
+			std::cerr << "FTDI write error " << r << std::endl;
+			throw std::runtime_error("FTDI write error");
+		}
+		n_sent += r;
+	}
+}
+
+void Device::readRaw(uint8_t* data, const size_t n) {
+	if (n == 0) return;
+	// read N bytes from device
+	ftdi_read_data_wait(m_ftdi, data, n);
+}
+
+void Device::writeReg(uint8_t addr, uint8_t port, uint16_t value) {
+	// send register write command
+	uint16_t wr_cmd[] = {
+			htobe16((CMD_WRITEREG << 12) | ((addr & 0x3f) << 6) | (port & 0x3f)),
+			htobe16(value)
+	};
+	int n = ftdi_write_data(m_ftdi, (unsigned char*) wr_cmd, sizeof(wr_cmd));
+	if (n != sizeof(wr_cmd)) {
+		throw std::runtime_error("FTDI write error");
 	}
 }
 

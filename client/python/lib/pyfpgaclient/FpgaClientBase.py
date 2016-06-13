@@ -43,6 +43,12 @@ class FpgaDevice(object):
     def read_reg_n(self, addr, port, n_words):
         return self._client.read_reg_n(self._serial, addr, port, n_words)
 
+    def _write_raw(self, data):
+        return self._client.write_raw(self._serial, data)
+
+    def _read_raw(self, n_bytes):
+        return self._client.read_raw(self._serial, n_bytes)
+
 
 class FpgaClientBase(object):
     RPC_RCODE_ERROR = -1
@@ -184,6 +190,17 @@ class FpgaClientBase(object):
         self.__send_object(["readregn", serial, addr, port, n_words])
         data_raw_be = self._wait_for_answer()[1]
         return np.frombuffer(data_raw_be, dtype=">u2", count=n_words)
+
+    def write_raw(self, serial, data):
+        data_raw = bytes(np.asarray(data, dtype=np.uint8).data)
+        self.__send_object(["writeraw", serial, data_raw])
+        self._wait_for_answer()
+        return
+
+    def read_raw(self, serial, n_bytes):
+        self.__send_object(["readraw", serial, n_bytes])
+        data_raw = self._wait_for_answer()[1]
+        return np.frombuffer(data_raw, dtype=np.uint8, count=n_bytes)
 
 
 if __name__ == "__main__":
