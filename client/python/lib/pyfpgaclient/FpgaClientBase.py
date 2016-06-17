@@ -10,9 +10,10 @@ import msgpack
 import numpy as np
 import socket
 import warnings
+from six import text_type, PY3
 
-from FaoutDevice import FaoutMixin
-from DigitizerDevice import DigitizerMixin
+from .FaoutDevice import FaoutMixin
+from .DigitizerDevice import DigitizerMixin
 
 _DEFAULT_DEVICE_MIXIN_MAP = {
     "FAOUT": FaoutMixin,
@@ -101,11 +102,14 @@ class FpgaClientBase(object):
             if rcode <= 0:
                 self._answers.append(packet)
             elif rcode == FpgaClientBase.RPC_RCODE_ADDED:
-                self.__handle_added(serial=packet[1])
+                serial = packet[1].decode() if PY3 else packet[1]
+                self.__handle_added(serial=serial)
             elif rcode == FpgaClientBase.RPC_RCODE_REMOVED:
-                self.__handle_removed(serial=packet[1])
+                serial = packet[1].decode() if PY3 else packet[1]
+                self.__handle_removed(serial=serial)
             elif rcode == FpgaClientBase.RPC_RCODE_REG_CHANGED:
                 serial, addr, port, value = packet[1:5]
+                serial = serial.decode() if PY3 else serial
                 self.__handle_reg_changed(serial, addr, port, value)
             else:
                 warnings.warn("unknown packet type (rcode=%d)" % rcode)
@@ -155,12 +159,14 @@ class FpgaClientBase(object):
         device._reg_changed(addr, port, value)
 
     def __handle_device_list_changes(self, device_list):
+        device_list = [serial.decode() if PY3 else serial for serial in device_list]
+
         # check for devices that were not added yet
         for serial in device_list:
             if serial not in self._devices:
                 self.__handle_added(serial)
         # check for devices that haven't been removed yet
-        for serial in self._devices.iterkeys():
+        for serial in list(self._devices.keys()):
             if serial not in device_list:
                 self.__handle_removed(serial)
 

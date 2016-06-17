@@ -6,6 +6,7 @@
 # The full license is in the file COPYING.txt, distributed with this software.
 #-----------------------------------------------------------------------------
 
+from six import text_type
 from pyfpgaclient.FpgaClientBase import FpgaClientBase, FpgaDevice
 from PyQt5 import QtCore, QtNetwork
 
@@ -27,10 +28,10 @@ class QFpgaClient(QtCore.QObject, FpgaClientBase):
     DEFAULT_TIMEOUT = 5
     DEVICE_BASE_CLASS = QFpgaDevice
 
-    deviceAdded = QtCore.pyqtSignal(str, object)
-    deviceRemoved = QtCore.pyqtSignal(str)
-    __deviceAddedQueue = QtCore.pyqtSignal(str, object)
-    __deviceRemovedQueue = QtCore.pyqtSignal(str)
+    deviceAdded = QtCore.pyqtSignal(text_type, object)
+    deviceRemoved = QtCore.pyqtSignal(text_type)
+    __deviceAddedQueue = QtCore.pyqtSignal(text_type, object)
+    __deviceRemovedQueue = QtCore.pyqtSignal(text_type)
 
     def __init__(self, host, port=9002):
         QtCore.QObject.__init__(self)
