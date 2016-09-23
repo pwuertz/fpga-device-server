@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #-----------------------------------------------------------------------------
 # Author: Peter Würtz, TU Kaiserslautern (2016)
 #
@@ -117,11 +118,11 @@ class QTestApplication(QtWidgets.QWidget):
         self._console.kernel_manager.kernel.shell.push(dct)
 
 
-def run():
+def run(host='localhost', port=9002):
     import argparse
     parser = argparse.ArgumentParser(description='Fpga Test Application')
-    parser.add_argument('host', nargs='?', default='localhost')
-    parser.add_argument('port', nargs='?', type=int, default=9002)
+    parser.add_argument('host', nargs='?', default=host)
+    parser.add_argument('port', nargs='?', type=int, default=port)
 
     args = parser.parse_args()
     app = QtWidgets.QApplication([])
