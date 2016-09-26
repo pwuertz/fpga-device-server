@@ -27,18 +27,24 @@ class QDeviceWidget(QtWidgets.QWidget):
         # create buttons for methods that do not require arguments
         methods = inspect.getmembers(device, predicate=inspect.ismethod)
         methods = [(n, m) for (n, m) in methods if not n.startswith("_")]
-        methods_simple = [(n, m) for (n, m) in methods if len(inspect.getargspec(m).args) == 1]
-
         layout_methods = QtWidgets.QHBoxLayout()
         layout.addLayout(layout_methods)
-        for (n, m) in methods_simple:
+        for (n, m) in methods:
+            method_args = inspect.getargspec(m).args
+            if len(method_args) > 2:
+                continue
+            if len(method_args) == 2 and not method_args[1].startswith("enable"):
+                continue
+            checkable = len(method_args) == 2
             btn = QtWidgets.QPushButton(n)
-            def wrap_gen(n, m):
-                def callfunc():
-                    result = m()
-                    display("dev.%s(): %s" % (n, result))
+            btn.setCheckable(checkable)
+            def wrap_gen(n, m, checkable):
+                def callfunc(checked):
+                    result = m() if not checkable else m(checked)
+                    msg = "dev.%s(%s): %s" % (n, checked if checkable else "", result)
+                    display(msg)
                 return callfunc
-            btn.clicked.connect(wrap_gen(n, m))
+            btn.clicked.connect(wrap_gen(n, m, checkable))
             layout_methods.addWidget(btn)
 
         # create label for register changed events
