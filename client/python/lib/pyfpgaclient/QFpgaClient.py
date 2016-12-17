@@ -7,7 +7,7 @@
 #-----------------------------------------------------------------------------
 
 from six import text_type
-from pyfpgaclient.FpgaClientBase import FpgaClientBase, FpgaDevice
+from FpgaClientBase import FpgaClientBase, FpgaDevice
 from PyQt5 import QtCore, QtNetwork
 
 

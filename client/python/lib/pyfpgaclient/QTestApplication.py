@@ -14,8 +14,8 @@ from qtconsole.rich_jupyter_widget import RichJupyterWidget as RichIPythonWidget
 from qtconsole.inprocess import QtInProcessKernelManager
 from IPython.display import display
 
-from pyfpgaclient.QFpgaClient import QFpgaClient
-from pyfpgaclient.QFaoutWidgets import DeviceWidget as FAoutDeviceWidget
+from QFpgaClient import QFpgaClient
+from QFaoutWidgets import DeviceWidget as FAoutDeviceWidget
 
 
 class QDeviceWidget(QtWidgets.QWidget):
@@ -27,8 +27,16 @@ class QDeviceWidget(QtWidgets.QWidget):
         # create buttons for methods that do not require arguments
         methods = inspect.getmembers(device, predicate=inspect.ismethod)
         methods = [(n, m) for (n, m) in methods if not n.startswith("_")]
-        layout_methods = QtWidgets.QHBoxLayout()
-        layout.addLayout(layout_methods)
+
+        def addWidgetToRow(widget):
+            if addWidgetToRow.n_row == addWidgetToRow.n_row_max:
+                addWidgetToRow.n_row = 0
+                addWidgetToRow.layout_row = QtWidgets.QHBoxLayout()
+                layout.addLayout(addWidgetToRow.layout_row)
+            addWidgetToRow.layout_row.addWidget(widget)
+            addWidgetToRow.n_row += 1
+        addWidgetToRow.n_row_max = addWidgetToRow.n_row = 5
+
         for (n, m) in methods:
             method_args = inspect.getargspec(m).args
             if len(method_args) > 2:
@@ -45,7 +53,7 @@ class QDeviceWidget(QtWidgets.QWidget):
                     display(msg)
                 return callfunc
             btn.clicked.connect(wrap_gen(n, m, checkable))
-            layout_methods.addWidget(btn)
+            addWidgetToRow(btn)
 
         # create label for register changed events
         self.label = QtWidgets.QLabel()
