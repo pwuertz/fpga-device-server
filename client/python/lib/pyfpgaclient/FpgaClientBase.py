@@ -12,13 +12,7 @@ import socket
 import warnings
 from six import text_type, PY3
 
-from .FaoutDevice import FaoutMixin
-from .DigitizerDevice import DigitizerMixin
-
-_DEFAULT_DEVICE_MIXIN_MAP = {
-    "FAOUT": FaoutMixin,
-    "DIGI": DigitizerMixin
-}
+_DEFAULT_DEVICE_MIXIN_MAP = {}
 
 
 class FpgaDevice(object):
@@ -72,6 +66,18 @@ class FpgaClientBase(object):
         self.__unpacker = msgpack.Unpacker()
         self._answers = []
         self._devices = {}
+
+    @classmethod
+    def registerDeviceMixin(cls, serial_prefix, DeviceMixin):
+        """
+        When creating a new device instance from DEVICE_BASE_CLASS,
+        also inherit from the DeviceMixin class if the serial_prefix of
+        the new device matches.
+        
+        :serial_prefix: prefix for device identification
+        :DeviceMixin: mixin class providing additional methods for a specific devices
+        """
+        cls.DEVICE_MIXIN_MAP[serial_prefix] = DeviceMixin
 
     def _write_data(self):
         # implement method for handling data to be written

@@ -15,7 +15,6 @@ from qtconsole.inprocess import QtInProcessKernelManager
 from IPython.display import display
 
 from QFpgaClient import QFpgaClient
-from QFaoutWidgets import DeviceWidget as FAoutDeviceWidget
 
 
 class QDeviceWidget(QtWidgets.QWidget):
@@ -141,7 +140,6 @@ def run(host='localhost', port=9002):
     args = parser.parse_args()
     app = QtWidgets.QApplication([])
     client = QFpgaClient(args.host, args.port)
-    QTestApplication.DEVICE_WIDGET_MAP['FAOUT'] = FAoutDeviceWidget
     win = QTestApplication(client)
     win.show()
     app.exec_()
